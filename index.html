@@ -352,7 +352,8 @@ canvas{display:block;width:100%;height:100%;}
     <div class="kpi-accent"></div>
     <div class="kpi-label">Performance</div>
     <div class="kpi-value" id="kpiPerf">—</div>
-    <div class="kpi-sub neu">depuis l'ouverture</div>
+    <div class="kpi-sub neu" id="kpiPerfSub">depuis l'ouverture</div>
+    <div class="kpi-sub" id="kpiPerf1Y" style="margin-top:3px;font-size:11px">—</div>
   </div>
   <div class="kpi">
     <div class="kpi-accent amber"></div>
@@ -365,7 +366,10 @@ canvas{display:block;width:100%;height:100%;}
 <!-- MAIN CHART -->
 <div class="chart-panel mobile-section" id="sectionChart">
   <div class="chart-header">
-    <div class="chart-title">Évolution du portefeuille</div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <div class="chart-title">Évolution du portefeuille</div>
+      <div id="marketStatus" style="display:flex;align-items:center;gap:5px;font-size:11px;font-family:'JetBrains Mono',monospace;"></div>
+    </div>
     <div class="chart-filters">
       <button class="cf-btn" onclick="setChartFilter('1J')">1J</button>
       <button class="cf-btn" onclick="setChartFilter('1M')">1M</button>
@@ -664,6 +668,14 @@ function render(){
   document.getElementById('kpiInvested').textContent=eur(invested);
   document.getElementById('kpiInvestedSub').textContent=`${buys.length} achat${buys.length>1?'s':''}${cfg.prior_invested>0?` · +${eur(cfg.prior_invested)} antérieurs`:''}`;
   document.getElementById('kpiPerf').innerHTML=`<span class="${perf>=0?'pos':'neg'}">${sgn(perf)}%</span>`;
+  // Annualized return (CAGR since first buy)
+  const firstBuyDate=buys.length>0?new Date(buys.reduce((min,b)=>b.date<min?b.date:min,buys[0].date)):null;
+  const yearsHeld=firstBuyDate?(new Date()-firstBuyDate)/(365.25*24*3600*1000):0;
+  const cagr=yearsHeld>0.08&&invested>0?((total/invested)**(1/yearsHeld)-1)*100:null;
+  document.getElementById('kpiPerfSub').textContent='depuis l'ouverture';
+  document.getElementById('kpiPerf1Y').innerHTML=cagr!=null
+    ?`<span class="${cagr>=0?'pos':'neg'}">${sgn(cagr,1)}%/an annualisé</span>`
+    :'<span class="neu">< 1 mois de recul</span>';
   document.getElementById('kpiProgress').textContent=fmt(progress,2)+'%';
   document.getElementById('kpiProgressSub').textContent=`objectif ${cfg.target_age} ans · ${new Date().getFullYear()+(cfg.target_age-cfg.age)}`;
 
@@ -684,6 +696,47 @@ function render(){
   renderDonut();
   renderHistory();
   ETFS.forEach((_,i)=>{if(document.getElementById('etfDetailPanel'+i)?.classList.contains('open')) renderEtfChart(i);});
+}
+
+// ── MARKET STATUS ────────────────────────────────────────────────────────────
+function updateMarketStatus(){
+  const el=document.getElementById('marketStatus');
+  if(!el) return;
+  const now=new Date();
+  // Euronext Paris: 09:00–17:30 Paris time (CET=UTC+1, CEST=UTC+2)
+  // Approximate with UTC offset: use getTimezoneOffset to detect local, but simpler:
+  // Paris is UTC+1 in winter, UTC+2 in summer
+  const utcH=now.getUTCHours(),utcM=now.getUTCMinutes();
+  const utcMins=utcH*60+utcM;
+  const dow=now.getUTCDay(); // 0=Sun,6=Sat
+  // CEST (summer): UTC+2 → market 07:00-15:30 UTC; CET (winter): UTC+1 → 08:00-16:30 UTC
+  // Rough check: DST last Sun March→last Sun Oct
+  const month=now.getUTCMonth()+1;
+  const isSummer=(month>3&&month<10)||(month===3&&now.getUTCDate()>=25)||(month===10&&now.getUTCDate()<25);
+  const openUTC=isSummer?7*60:8*60;
+  const closeUTC=isSummer?15*60+30:16*60+30;
+  const isWeekend=dow===0||dow===6;
+  const isOpen=!isWeekend&&utcMins>=openUTC&&utcMins<closeUTC;
+  if(isOpen){
+    const minsLeft=closeUTC-utcMins;
+    const hLeft=Math.floor(minsLeft/60),mLeft=minsLeft%60;
+    el.innerHTML=`<span style="width:6px;height:6px;border-radius:50%;background:#00b896;display:inline-block;animation:blink 2s ease-in-out infinite"></span><span style="color:var(--accent)">Ouvert</span><span style="color:var(--muted)">· ferme dans ${hLeft}h${String(mLeft).padStart(2,'0')}</span>`;
+  } else {
+    // Next open
+    let minsToOpen=0;
+    if(isWeekend){
+      const daysToMon=dow===6?2:1;
+      minsToOpen=daysToMon*24*60+(openUTC-utcMins);
+    } else if(utcMins<openUTC){
+      minsToOpen=openUTC-utcMins;
+    } else {
+      // after close — next day (skip weekend)
+      const daysAhead=dow===5?3:dow===6?2:1;
+      minsToOpen=daysAhead*24*60+(openUTC-utcMins);
+    }
+    const hTo=Math.floor(minsToOpen/60),mTo=minsToOpen%60;
+    el.innerHTML=`<span style="width:6px;height:6px;border-radius:50%;background:var(--muted);display:inline-block"></span><span style="color:var(--muted2)">Fermé</span><span style="color:var(--muted)">· ouvre dans ${hTo}h${String(mTo).padStart(2,'0')}</span>`;
+  }
 }
 
 // ── MAIN CHART ────────────────────────────────────────────────────────────────
@@ -842,12 +895,44 @@ function renderChart(currentTotal){
   ctx.beginPath();pts.forEach((p,i)=>i===0?ctx.moveTo(toX(p.date),toY(p.value)):ctx.lineTo(toX(p.date),toY(p.value)));
   ctx.strokeStyle=lineColor;ctx.lineWidth=2;ctx.stroke();
 
-  // Last dot
+  // Last dot — pulsing ring for live feel
   const lp=pts[pts.length-1];
-  ctx.beginPath();ctx.arc(toX(lp.date),toY(lp.value),4,0,Math.PI*2);
+  const lpx=toX(lp.date),lpy=toY(lp.value);
+  const pulse=0.5+0.5*Math.sin(Date.now()/400); // 0→1 oscillation
+  const hex2=lineColor.replace('#','');
+  const lr=parseInt(hex2.slice(0,2),16),lg=parseInt(hex2.slice(2,4),16),lb=parseInt(hex2.slice(4,6),16);
+  ctx.beginPath();ctx.arc(lpx,lpy,4+pulse*5,0,Math.PI*2);
+  ctx.fillStyle=`rgba(${lr},${lg},${lb},${0.25-pulse*0.2})`;ctx.fill();
+  ctx.beginPath();ctx.arc(lpx,lpy,4,0,Math.PI*2);
   ctx.fillStyle=lineColor;ctx.fill();
-  ctx.beginPath();ctx.arc(toX(lp.date),toY(lp.value),4,0,Math.PI*2);
+  ctx.beginPath();ctx.arc(lpx,lpy,4,0,Math.PI*2);
   ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
+
+  // Buy markers on MAX
+  if(chartFilter==='MAX'&&buys.length>0){
+    const held=[0,0,0,0];
+    const sorted=[...buys].sort((a,b)=>a.date.localeCompare(b.date));
+    sorted.forEach(b=>{
+      const buyDate=new Date(b.date+'T12:00:00Z');
+      if(buyDate.getTime()<minT||buyDate.getTime()>maxT) return;
+      const bx=toX(buyDate);
+      held[b.etfIdx]+=b.parts;
+      // Small triangle marker at bottom of chart area
+      const my=PAD.top+cH+6;
+      ctx.beginPath();
+      ctx.moveTo(bx,PAD.top+cH);
+      ctx.lineTo(bx-4,my+6);
+      ctx.lineTo(bx+4,my+6);
+      ctx.closePath();
+      ctx.fillStyle=COLORS[b.etfIdx];
+      ctx.globalAlpha=0.8;ctx.fill();ctx.globalAlpha=1;
+      // Thin vertical line up to curve
+      ctx.strokeStyle=COLORS[b.etfIdx];ctx.lineWidth=1;ctx.globalAlpha=0.25;
+      ctx.setLineDash([2,3]);
+      ctx.beginPath();ctx.moveTo(bx,PAD.top);ctx.lineTo(bx,PAD.top+cH);ctx.stroke();
+      ctx.setLineDash([]);ctx.globalAlpha=1;
+    });
+  }
 
   // If hover active, draw cursor on top (coords already in CSS-pixel space due to ctx.scale(2,2))
   if(_hoverPt) drawCursorOnCanvas(canvas);
@@ -1292,6 +1377,10 @@ async function saveSettings(){
 window.addEventListener('load',()=>{
   initMainCursor();
   setupProjTooltip();
+  updateMarketStatus();
+  setInterval(updateMarketStatus,60000); // update every minute
+  // Live pulse: redraw chart every second for the blinking dot
+  setInterval(()=>{if(mainPts&&mainPts.length>0) renderChart(portfolioValue());},1000);
 });
 
 // ── THEME ─────────────────────────────────────────────────────────────────────
