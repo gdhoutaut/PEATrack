@@ -849,132 +849,112 @@ function renderChart(currentTotal){
   ctx.beginPath();ctx.arc(toX(lp.date),toY(lp.value),4,0,Math.PI*2);
   ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
 
-  // If hover active, redraw cursor on top
-  if(_hoverPt) drawMainCursor(canvas);
+  // If hover active, draw cursor on top (coords already in CSS-pixel space due to ctx.scale(2,2))
+  if(_hoverPt) drawCursorOnCanvas(canvas);
 }
 
 // ── CURSOR / HOVER ───────────────────────────────────────────────────────────
-// mainCanvas hover state
-let _hoverPt=null; // {xPos,yPos,valText,dateText,color} or null
+let _hoverPt=null;
 
 function initMainCursor(){
   const canvas=document.getElementById('mainCanvas');
   if(!canvas) return;
   canvas.addEventListener('mousemove', e=>{
-    const pts=mainPts;
-    if(!pts||pts.length<2){_hoverPt=null;return;}
+    if(!mainPts||mainPts.length<2){_hoverPt=null;return;}
     const rect=canvas.getBoundingClientRect();
+    // mouse position in CSS pixels (canvas is displayed at rect.width x rect.height)
     const mouseX=e.clientX-rect.left;
     const W=rect.width, H=rect.height;
-    const PAD_L=72, PAD_R=14, PAD_T=12, PAD_B=34;
+    const PAD_L=72,PAD_R=14,PAD_T=12,PAD_B=34;
     const cW=W-PAD_L-PAD_R, cH=H-PAD_T-PAD_B;
-    const allT=pts.map(p=>p.date.getTime());
-    const allV=pts.map(p=>p.value);
-    const minT=Math.min(...allT), maxT=Math.max(...allT);
+    const allT=mainPts.map(p=>p.date.getTime());
+    const allV=mainPts.map(p=>p.value);
+    const minT=Math.min(...allT),maxT=Math.max(...allT);
     const frac=Math.max(0,Math.min(1,(mouseX-PAD_L)/cW));
     const targetT=minT+frac*(maxT-minT);
-    let closest=pts[0], minDiff=Infinity;
-    pts.forEach(p=>{const d=Math.abs(p.date.getTime()-targetT);if(d<minDiff){minDiff=d;closest=p;}});
+    let closest=mainPts[0],minDiff=Infinity;
+    mainPts.forEach(p=>{const d=Math.abs(p.date.getTime()-targetT);if(d<minDiff){minDiff=d;closest=p;}});
     const vPad=chartFilter==='1J'?0.003:chartFilter==='1M'?0.02:0.05;
-    const vMin=Math.min(...allV), vMax=Math.max(...allV), vRange=vMax-vMin;
+    const vMin=Math.min(...allV),vMax=Math.max(...allV),vRange=vMax-vMin;
     const scaleMin=vMin-vRange*vPad-(vRange===0?vMin*vPad:0);
     const scaleMax=vMax+vRange*vPad+(vRange===0?vMax*vPad:0);
+    // All coords in CSS pixels
     const xPos=PAD_L+((closest.date.getTime()-minT)/(maxT-minT))*cW;
     const yPos=PAD_T+(1-(closest.value-scaleMin)/(scaleMax-scaleMin))*cH;
-    const isUp=pts[pts.length-1].value>=pts[0].value;
-    const color=isUp?'#00b896':'#e8394a';
-    const valText=eur(Math.round(closest.value));
-    const dateText=chartFilter==='1J'
-      ?closest.date.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})
-      :closest.date.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'});
-    _hoverPt={xPos,yPos,valText,dateText,color,W,H,PAD_T,PAD_B};
-    drawMainCursor(canvas);
+    const isUp=mainPts[mainPts.length-1].value>=mainPts[0].value;
+    _hoverPt={
+      xPos,yPos,
+      color:isUp?'#00b896':'#e8394a',
+      valText:eur(Math.round(closest.value)),
+      dateText:chartFilter==='1J'
+        ?closest.date.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})
+        :closest.date.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}),
+      W,H,PAD_T,PAD_B,cW,cH
+    };
+    // Full redraw with cursor on top
+    renderChart(portfolioValue());
   });
-  canvas.addEventListener('mouseleave', ()=>{
+  canvas.addEventListener('mouseleave',()=>{
     _hoverPt=null;
-    // just re-render to restore the permanent last dot
-    renderChartCursorOnly(document.getElementById('mainCanvas'));
+    renderChart(portfolioValue());
   });
 }
 
-function drawMainCursor(canvas){
-  if(!canvas) return;
+function drawCursorOnCanvas(canvas){
+  if(!_hoverPt||!canvas) return;
   const ctx=canvas.getContext('2d');
-  // canvas is already scaled 2x from renderChart — we re-scale
-  const W=canvas.offsetWidth, H=canvas.offsetHeight;
-  const dpr=2;
-  if(!_hoverPt) return;
-  const {xPos,yPos,valText,dateText,color,PAD_T,PAD_B}=_hoverPt;
+  const {xPos,yPos,color,valText,dateText,W,H,PAD_T,PAD_B}=_hoverPt;
   const isDark=document.documentElement.getAttribute('data-theme')==='dark';
-
-  // We need to draw ON TOP of the existing canvas content
-  // Save state, draw cursor elements, don't clear
-  ctx.save();
-  // Scale is already 2x from renderChart — but canvas may have been resized since
-  // Re-ensure scale
-  // Actually since renderChart already set canvas.width=W*2 and scaled, we just draw
-  const s=dpr;
+  // canvas.width = W*2 (set by renderChart), ctx already scaled 2x by renderChart
+  // so we draw in CSS-pixel coords (renderChart did ctx.scale(2,2))
 
   // Vertical hairline
-  ctx.strokeStyle='rgba(150,170,190,.3)';ctx.lineWidth=1*s;ctx.setLineDash([3*s,4*s]);
-  ctx.beginPath();ctx.moveTo(xPos*s,PAD_T*s);ctx.lineTo(xPos*s,(H-PAD_B)*s);ctx.stroke();
+  ctx.save();
+  ctx.strokeStyle='rgba(150,170,190,.28)';ctx.lineWidth=1;ctx.setLineDash([3,4]);
+  ctx.beginPath();ctx.moveTo(xPos,PAD_T);ctx.lineTo(xPos,H-PAD_B);ctx.stroke();
   ctx.setLineDash([]);
 
-  // Glow
+  // Glow ring
   const hex=color.replace('#','');
-  const r=parseInt(hex.slice(0,2),16),g2=parseInt(hex.slice(2,4),16),b=parseInt(hex.slice(4,6),16);
-  ctx.beginPath();ctx.arc(xPos*s,yPos*s,9*s,0,Math.PI*2);
-  ctx.fillStyle=`rgba(${r},${g2},${b},.18)`;ctx.fill();
-  // Dot
-  ctx.beginPath();ctx.arc(xPos*s,yPos*s,5*s,0,Math.PI*2);
-  ctx.fillStyle=color;ctx.fill();
-  ctx.beginPath();ctx.arc(xPos*s,yPos*s,5*s,0,Math.PI*2);
-  ctx.strokeStyle='#fff';ctx.lineWidth=2.5*s;ctx.stroke();
+  const ri=parseInt(hex.slice(0,2),16),gi=parseInt(hex.slice(2,4),16),bi=parseInt(hex.slice(4,6),16);
+  ctx.beginPath();ctx.arc(xPos,yPos,9,0,Math.PI*2);
+  ctx.fillStyle=`rgba(${ri},${gi},${bi},.18)`;ctx.fill();
 
-  // Label
-  const labelX=Math.min(Math.max(xPos,54),W-54);
+  // Dot
+  ctx.beginPath();ctx.arc(xPos,yPos,5,0,Math.PI*2);
+  ctx.fillStyle=color;ctx.fill();
+  ctx.beginPath();ctx.arc(xPos,yPos,5,0,Math.PI*2);
+  ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
+
+  // Floating label — clamp so it never overflows left/right
+  const labelX=Math.min(Math.max(xPos,56),W-56);
   const labelY=Math.max(yPos-16,PAD_T+14);
   ctx.textAlign='center';
-  ctx.font=`700 ${13*s}px "Plus Jakarta Sans",sans-serif`;
+  ctx.font='700 13px "Plus Jakarta Sans",sans-serif';
   ctx.fillStyle=isDark?'#e8f1f8':'#111827';
-  ctx.fillText(valText,labelX*s,labelY*s);
-  ctx.font=`500 ${10*s}px "JetBrains Mono",monospace`;
+  ctx.fillText(valText,labelX,labelY);
+  ctx.font='500 10px "JetBrains Mono",monospace';
   ctx.fillStyle=isDark?'#8899aa':'#9aa3af';
-  ctx.fillText(dateText,labelX*s,(labelY+14)*s);
-
+  ctx.fillText(dateText,labelX,labelY+13);
   ctx.restore();
 }
 
-function renderChartCursorOnly(canvas){
-  // Called on mouseleave — just redraw the permanent last dot
-  if(!canvas||!mainPts||mainPts.length===0) return;
-  // renderChart redraws everything including the last dot — but it's heavy
-  // Instead: nothing — the last dot is already on the canvas from renderChart
-  // We can't selectively erase the cursor without a full redraw
-  // So: trigger a lightweight renderChart
-  const total=portfolioValue();
-  renderChart(total);
-}
-
-// Proj tooltip (DOM-based, simpler)
+// Proj tooltip (DOM-based)
 function setupProjTooltip(){
   const canvas=document.getElementById('projCanvas');
   const tooltip=document.getElementById('projTooltip');
   if(!canvas||!tooltip) return;
-  canvas.addEventListener('mousemove', e=>{
-    const pts=projPts;
-    if(!pts||pts.length<2){tooltip.classList.remove('visible');return;}
+  canvas.addEventListener('mousemove',e=>{
+    if(!projPts||projPts.length<2){tooltip.classList.remove('visible');return;}
     const rect=canvas.getBoundingClientRect();
     const mouseX=e.clientX-rect.left;
-    const W=rect.width;
-    const PAD_L=52,PAD_R=8;
-    const cW=W-PAD_L-PAD_R;
-    const allT=pts.map(p=>p.year);
-    const minT=Math.min(...allT),maxT=Math.max(...allT);
+    const W=rect.width,PAD_L=52,PAD_R=8,cW=W-PAD_L-PAD_R;
+    const allY=projPts.map(p=>p.year);
+    const minY=Math.min(...allY),maxY=Math.max(...allY);
     const frac=Math.max(0,Math.min(1,(mouseX-PAD_L)/cW));
-    const targetT=minT+frac*(maxT-minT);
-    let closest=pts[0],minDiff=Infinity;
-    pts.forEach(p=>{const d=Math.abs(p.year-targetT);if(d<minDiff){minDiff=d;closest=p;}});
+    const targetY=minY+frac*(maxY-minY);
+    let closest=projPts[0],minDiff=Infinity;
+    projPts.forEach(p=>{const d=Math.abs(p.year-targetY);if(d<minDiff){minDiff=d;closest=p;}});
     tooltip.style.left=Math.min(Math.max(mouseX,60),W-60)+'px';
     tooltip.style.top='0px';
     document.getElementById('projTtVal').textContent=eur(Math.round(closest.value));
