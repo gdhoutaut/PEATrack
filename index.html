@@ -856,8 +856,8 @@ function renderChart(currentTotal){
 // ── TOOLTIP + CURSOR DOT ─────────────────────────────────────────────────────
 function setupTooltip(canvasId, tooltipId, valId, dateId, getPts, isProj){
   const canvas=document.getElementById(canvasId);
-  const tooltip=document.getElementById(tooltipId);
-  if(!canvas||!tooltip) return;
+  const tooltip=tooltipId?document.getElementById(tooltipId):null;
+  if(!canvas) return;
   const cursorCanvas=isProj?null:document.getElementById('mainCursor');
 
   function drawCursor(xPos, yPos, color, valText, dateText){
@@ -908,7 +908,7 @@ function setupTooltip(canvasId, tooltipId, valId, dateId, getPts, isProj){
 
   function onMove(e){
     const pts=getPts();
-    if(!pts||pts.length<2){tooltip.classList.remove('visible');clearCursor();return;}
+    if(!pts||pts.length<2){if(tooltip)tooltip.classList.remove('visible');clearCursor();return;}
     const rect=canvas.getBoundingClientRect();
     const clientX=e.touches?e.touches[0].clientX:e.clientX;
     const mouseX=(clientX-rect.left);
@@ -950,8 +950,14 @@ function setupTooltip(canvasId, tooltipId, valId, dateId, getPts, isProj){
         :d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'});
     }
 
-    // Draw cursor dot + floating label on overlay canvas
-    if(!isProj){
+    // Proj: update DOM tooltip; main chart: draw on canvas
+    if(isProj&&tooltip){
+      tooltip.style.left=Math.min(Math.max(xPos,60),W-60)+'px';
+      tooltip.style.top='0px';
+      document.getElementById(valId).textContent=valText;
+      document.getElementById(dateId).textContent=dateText;
+      tooltip.classList.add('visible');
+    } else if(!isProj){
       const meta=canvas._chartMeta;
       const color=meta?.lineColor||'#00b896';
       drawCursor(xPos,yPos,color,valText,dateText);
@@ -959,6 +965,7 @@ function setupTooltip(canvasId, tooltipId, valId, dateId, getPts, isProj){
   }
 
   function onLeave(){
+    if(tooltip) tooltip.classList.remove('visible');
     clearCursor();
     if(!isProj) render();
   }
@@ -1291,7 +1298,7 @@ async function saveSettings(){
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
 window.addEventListener('load',()=>{
-  setupTooltip('mainCanvas','mainTooltip','ttVal','ttDate',()=>mainPts,false);
+  setupTooltip('mainCanvas',null,null,null,()=>mainPts,false);
   setupTooltip('projCanvas','projTooltip','projTtVal','projTtDate',()=>projPts,true);
 });
 
