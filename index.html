@@ -476,15 +476,23 @@ async function loadFromSupabase(){
 
 // ── PRICES ────────────────────────────────────────────────────────────────────
 async function fetchPrice(ticker){
-  const url=`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=2d`;
-  const proxy=`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-  try{
-    const r=await fetch(proxy,{signal:AbortSignal.timeout(9000)});
-    const d=await r.json();
-    const m=d?.chart?.result?.[0]?.meta;
-    if(!m) return null;
-    return { price: m.regularMarketPrice??m.previousClose, prev: m.previousClose };
-  }catch{ return null; }
+  const yahooUrl=`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=2d`;
+  const proxies = [
+    `https://corsproxy.io/?url=${encodeURIComponent(yahooUrl)}`,
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(yahooUrl)}`,
+    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(yahooUrl)}`,
+  ];
+  for(const proxy of proxies){
+    try{
+      const r=await fetch(proxy,{signal:AbortSignal.timeout(8000)});
+      if(!r.ok) continue;
+      const d=await r.json();
+      const m=d?.chart?.result?.[0]?.meta;
+      if(!m) continue;
+      return { price: m.regularMarketPrice??m.previousClose, prev: m.previousClose };
+    }catch{ continue; }
+  }
+  return null;
 }
 
 async function fetchPrices(){
