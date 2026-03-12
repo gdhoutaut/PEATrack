@@ -6,6 +6,7 @@
 <title>PEA · Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root {
     --bg: #060a0e;
@@ -40,8 +41,18 @@
   .header { display:flex; justify-content:space-between; align-items:center; margin-bottom:32px; }
   .brand { font-family:'Syne',sans-serif; font-weight:800; font-size:20px; color:var(--bright); letter-spacing:-0.5px; }
   .brand em { color:var(--accent); font-style:normal; }
-  .header-right { display:flex; gap:8px; align-items:center; }
+  .header-right { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
   .clock { font-size:10px; color:var(--muted); letter-spacing:0.06em; margin-right:4px; }
+
+  /* SYNC STATUS */
+  .sync-status {
+    font-size:10px; padding:4px 10px; border-radius:4px;
+    border:1px solid var(--border); color:var(--muted);
+    display:flex; align-items:center; gap:5px;
+  }
+  .sync-status.ok { border-color:rgba(0,229,176,0.3); color:var(--accent); }
+  .sync-status.err { border-color:rgba(244,63,94,0.3); color:var(--red); }
+  .sync-status.loading { border-color:rgba(59,130,246,0.3); color:var(--blue); }
 
   /* BUTTONS */
   .btn {
@@ -54,8 +65,6 @@
   .btn:hover { color:var(--accent); border-color:var(--accent); background:rgba(0,229,176,0.05); }
   .btn.primary { background:var(--accent); color:#000; border-color:var(--accent); font-weight:600; }
   .btn.primary:hover { opacity:0.85; color:#000; }
-  .btn.danger { color:var(--red); border-color:var(--red); }
-  .btn.danger:hover { background:rgba(244,63,94,0.08); }
 
   /* HERO */
   .hero {
@@ -135,7 +144,7 @@
   /* HISTORY */
   .hist-head, .hist-row {
     display:grid;
-    grid-template-columns: 80px 90px repeat(4,70px) 90px 1fr;
+    grid-template-columns: 80px 90px repeat(4,70px) 90px 1fr 32px;
     gap:8px; align-items:center;
   }
   .hist-head { padding:6px 10px; font-size:10px; text-transform:uppercase; letter-spacing:0.08em; color:var(--muted); border-bottom:1px solid var(--border); }
@@ -146,7 +155,8 @@
   .badge { display:inline-block; padding:2px 7px; border-radius:3px; font-size:10px; font-weight:500; }
   .badge.pos { background:rgba(0,229,176,0.12); color:var(--accent); }
   .badge.neg { background:rgba(244,63,94,0.12); color:var(--red); }
-  .badge.neu { background:rgba(90,122,142,0.15); color:var(--muted2); }
+  .del-btn { background:none; border:none; color:var(--muted); cursor:pointer; font-size:13px; padding:2px 4px; border-radius:3px; transition:color 0.15s; }
+  .del-btn:hover { color:var(--red); }
 
   /* MODAL */
   .overlay { display:none; position:fixed; inset:0; background:rgba(6,10,14,0.9); z-index:200; align-items:center; justify-content:center; backdrop-filter:blur(6px); }
@@ -169,11 +179,6 @@
   .modal-actions { display:flex; gap:10px; margin-top:20px; }
   .modal-actions .btn { flex:1; justify-content:center; padding:10px; font-size:12px; }
 
-  /* ETF SETTINGS */
-  .etf-cfg-block { padding:12px 0; border-bottom:1px solid var(--border); }
-  .etf-cfg-block:last-child { border-bottom:none; }
-  .etf-cfg-label { font-family:'Syne',sans-serif; font-weight:700; font-size:12px; margin-bottom:8px; }
-
   /* MISC */
   .pos { color:var(--accent) !important; }
   .neg { color:var(--red) !important; }
@@ -183,18 +188,21 @@
   .spinner { width:10px; height:10px; border:1.5px solid var(--border2); border-top-color:var(--accent); border-radius:50%; animation:spin 0.7s linear infinite; display:inline-block; }
   @keyframes spin { to { transform:rotate(360deg); } }
   .statusbar { margin-top:32px; padding-top:14px; border-top:1px solid var(--border); display:flex; justify-content:space-between; font-size:10px; color:var(--muted); }
-  .section-gap { margin-bottom:14px; }
   .empty { padding:16px; color:var(--muted); font-size:11px; }
 
   @media(max-width:700px){
     .hero { grid-template-columns:1fr 1fr; gap:16px; }
     .hero-block { padding:0; border:none !important; }
+    .hero-val { font-size:22px; }
     .two-col { grid-template-columns:1fr; }
     .etf-head, .etf-row { grid-template-columns:48px 1fr 70px 65px 70px; }
     .etf-head span:nth-child(6), .etf-row span:nth-child(6),
     .etf-head span:nth-child(7), .etf-row span:nth-child(7) { display:none; }
-    .hist-head, .hist-row { grid-template-columns:70px 80px 65px 65px; }
-    .hist-head span:nth-child(n+5), .hist-row span:nth-child(n+5) { display:none; }
+    .hist-head, .hist-row { grid-template-columns:70px 60px 60px 70px 32px; }
+    .hist-head span:nth-child(n+4):not(:nth-child(5)):not(:last-child),
+    .hist-row span:nth-child(n+4):not(:nth-child(5)):not(:last-child) { display:none; }
+    .header-right { gap:6px; }
+    .clock { display:none; }
   }
 </style>
 </head>
@@ -206,6 +214,7 @@
     <div class="brand">PEA<em>·</em>track</div>
     <div class="header-right">
       <span class="clock" id="clockEl"></span>
+      <div class="sync-status loading" id="syncStatus">⟳ connexion…</div>
       <button class="btn" onclick="fetchPrices()"><span id="refreshIco">↻</span> Cours</button>
       <button class="btn" onclick="openSettings()">⚙ Config</button>
       <button class="btn primary" onclick="openBuy()">+ Achat</button>
@@ -276,7 +285,7 @@
         <div class="donut-leg" id="donutLeg"></div>
       </div>
       <div style="margin-top:18px">
-        <div class="panel-title" style="margin-bottom:4px"><span>Projection 7%/an</span></div>
+        <div class="panel-title" style="margin-bottom:4px"><span>Projection</span><span id="projReturnLabel" class="neu">7%/an</span></div>
         <div class="proj-wrap"><canvas id="projCanvas"></canvas></div>
         <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:3px">
           <span>Auj.</span><span id="projEnd">—</span>
@@ -286,24 +295,23 @@
   </div>
 
   <!-- HISTORY -->
-  <div class="panel section-gap">
+  <div class="panel">
     <div class="panel-title">
       <span>Historique des achats</span>
-      <div style="display:flex;gap:8px;align-items:center">
-        <span id="histCount" class="neu">0 achats</span>
-      </div>
+      <span id="histCount" class="neu">0 achats</span>
     </div>
     <div class="hist-head">
       <span>Date</span>
       <span>ETF</span>
       <span class="tar">Parts</span>
-      <span class="tar">Prix achat</span>
+      <span class="tar">Prix</span>
       <span class="tar">Versé</span>
-      <span class="tar">Cours actuel</span>
-      <span class="tar">P&L ligne</span>
+      <span class="tar">Cours</span>
+      <span class="tar">P&L</span>
       <span>Note</span>
+      <span></span>
     </div>
-    <div id="histList"><div class="empty">Aucun achat — clique sur "+ Achat" pour commencer.</div></div>
+    <div id="histList"><div class="empty">Chargement…</div></div>
   </div>
 
   <div class="statusbar">
@@ -316,8 +324,7 @@
 <div class="overlay" id="buyOverlay">
   <div class="modal">
     <div class="modal-title">+ Nouvel achat</div>
-    <div class="modal-sub">Renseigne les parts achetées et le prix d'achat. Le versement est calculé automatiquement.</div>
-
+    <div class="modal-sub">Renseigne les parts achetées et le prix d'achat unitaire.</div>
     <div class="two-fields">
       <div class="field">
         <label>ETF</label>
@@ -333,23 +340,21 @@
         <input type="date" id="buyDate">
       </div>
     </div>
-
     <div class="two-fields">
       <div class="field">
         <label>Nombre de parts</label>
         <input type="number" id="buyParts" placeholder="ex: 3" step="0.01" min="0.01" oninput="updateBuyPreview()">
       </div>
       <div class="field">
-        <label>Prix d'achat / part (€)</label>
+        <label>Prix / part (€)</label>
         <input type="number" id="buyPrice" placeholder="ex: 24.50" step="0.01" min="0.01" oninput="updateBuyPreview()">
         <div class="field-hint" id="buyPriceHint">—</div>
       </div>
     </div>
-
     <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:12px;margin-bottom:14px">
       <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Récapitulatif</div>
       <div style="display:flex;justify-content:space-between;font-size:13px">
-        <span style="color:var(--muted2)">Versement ce mois</span>
+        <span style="color:var(--muted2)">Versement</span>
         <span style="color:var(--accent);font-family:'Syne',sans-serif;font-weight:700" id="buyPreviewTotal">—</span>
       </div>
       <div style="display:flex;justify-content:space-between;font-size:11px;margin-top:4px">
@@ -357,15 +362,13 @@
         <span style="color:var(--muted2)" id="buyPreviewCumul">—</span>
       </div>
     </div>
-
     <div class="field">
       <label>Note (optionnel)</label>
       <input type="text" id="buyNote" placeholder="ex: DCA mensuel, renforcement EM…">
     </div>
-
     <div class="modal-actions">
       <button class="btn" onclick="closeBuy()">Annuler</button>
-      <button class="btn primary" onclick="saveBuy()">Enregistrer</button>
+      <button class="btn primary" id="saveBuyBtn" onclick="saveBuy()">Enregistrer</button>
     </div>
   </div>
 </div>
@@ -374,8 +377,7 @@
 <div class="overlay" id="settingsOverlay">
   <div class="modal">
     <div class="modal-title">⚙ Configuration</div>
-    <div class="modal-sub">Paramètres de projection et total versé initial si tu as déjà un historique avant ce dashboard.</div>
-
+    <div class="modal-sub">Paramètres de projection. Les versements antérieurs permettent de prendre en compte ce que tu avais déjà investi avant ce dashboard.</div>
     <div class="two-fields">
       <div class="field">
         <label>Âge actuel</label>
@@ -390,25 +392,28 @@
         <input type="number" id="cfgTarget" step="10000">
       </div>
       <div class="field">
-        <label>Rendement hypothèse (%/an)</label>
+        <label>Rendement (%/an)</label>
         <input type="number" id="cfgReturn" step="0.5" min="1" max="20">
       </div>
     </div>
-
     <div class="field">
-      <label>Versements antérieurs (€) <span style="color:var(--muted);font-size:10px">— avant ce dashboard</span></label>
+      <label>Versements antérieurs (€)</label>
       <input type="number" id="cfgPrior" step="100" min="0" placeholder="0">
-      <div class="field-hint">Si tu as déjà versé de l'argent avant de commencer à logguer ici.</div>
+      <div class="field-hint">Montant total versé avant de commencer à logguer ici.</div>
     </div>
-
     <div class="modal-actions">
       <button class="btn" onclick="closeSettings()">Annuler</button>
-      <button class="btn primary" onclick="saveSettings()">Enregistrer</button>
+      <button class="btn primary" id="saveCfgBtn" onclick="saveSettings()">Enregistrer</button>
     </div>
   </div>
 </div>
 
 <script>
+// ── SUPABASE ──────────────────────────────────────────────────────────────────
+const SUPA_URL = 'https://iyhzqalvcgxsrveaympk.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml5aHpxYWx2Y2d4c3J2ZWF5bXBrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyOTM3NTksImV4cCI6MjA4ODg2OTc1OX0.Lpr1udWfuoQdcH0xZkh3wCMsJJkdhEmIWmNu6sVX_X4';
+const sb = supabase.createClient(SUPA_URL, SUPA_KEY);
+
 // ── CONFIG ────────────────────────────────────────────────────────────────────
 const ETFS = [
   { ticker:'ESEE.F',  label:'ESEE', name:'BNP Easy S&P 500',          zone:'US'    },
@@ -418,17 +423,56 @@ const ETFS = [
 ];
 const COLORS = ['#00e5b0','#3b82f6','#a78bfa','#f59e0b'];
 
-function defCfg(){ return { age:26, targetAge:50, target:1_000_000, annualReturn:7, priorInvested:0 }; }
-
-function load(k,d){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):d; }catch{ return d; } }
-function save(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch{} }
-
-let cfg    = load('pea3_cfg',   defCfg());
-let buys   = load('pea3_buys',  []); // [{etfIdx, parts, price, date, note}]
+let cfg  = { age:26, target_age:50, target:1_000_000, annual_return:7, prior_invested:0 };
+let buys = []; // from Supabase
 let prices = {};
 
 // ── CLOCK ─────────────────────────────────────────────────────────────────────
-setInterval(()=>{ document.getElementById('clockEl').textContent=new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}); },1000);
+setInterval(()=>{
+  document.getElementById('clockEl').textContent =
+    new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+},1000);
+
+// ── SYNC STATUS ───────────────────────────────────────────────────────────────
+function setSyncStatus(state, text){
+  const el = document.getElementById('syncStatus');
+  el.className = `sync-status ${state}`;
+  el.textContent = text;
+}
+
+// ── SUPABASE LOAD ─────────────────────────────────────────────────────────────
+async function loadFromSupabase(){
+  setSyncStatus('loading','⟳ synchro…');
+  try {
+    // Load config
+    const { data: cfgData, error: cfgErr } = await sb.from('config').select('*').eq('id',1).single();
+    if (!cfgErr && cfgData) {
+      cfg = cfgData;
+    } else {
+      // Insert default config
+      await sb.from('config').upsert({ id:1, ...cfg });
+    }
+
+    // Load buys
+    const { data: buysData, error: buysErr } = await sb.from('buys').select('*').order('date', {ascending:true});
+    if (!buysErr && buysData) {
+      buys = buysData.map(b=>({
+        id: b.id,
+        etfIdx: b.etf_idx,
+        parts: parseFloat(b.parts),
+        price: parseFloat(b.price),
+        date: b.date,
+        note: b.note||''
+      }));
+    }
+
+    setSyncStatus('ok','✓ synchronisé');
+    render();
+  } catch(e) {
+    setSyncStatus('err','✗ erreur sync');
+    console.error(e);
+  }
+}
 
 // ── PRICES ────────────────────────────────────────────────────────────────────
 async function fetchPrice(ticker){
@@ -460,49 +504,40 @@ function fmt(n,d=2){ if(n==null||isNaN(n)) return '—'; return n.toLocaleString
 function eur(n,d=0){ return fmt(n,d)+' €'; }
 function sgn(n,d=1){ return (n>=0?'+':'')+fmt(n,d); }
 
-// Parts détenues par ETF
 function partsHeld(){
   const h=[0,0,0,0];
   buys.forEach(b=>{ h[b.etfIdx]+=b.parts; });
   return h;
 }
 
-// PRU par ETF (moyenne pondérée)
 function pruByEtf(){
   const sumCost=[0,0,0,0], sumParts=[0,0,0,0];
   buys.forEach(b=>{ sumCost[b.etfIdx]+=b.parts*b.price; sumParts[b.etfIdx]+=b.parts; });
   return sumParts.map((p,i)=>p>0?sumCost[i]/p:0);
 }
 
-// Valeur totale live
 function portfolioValue(){
   const held=partsHeld();
-  return ETFS.reduce((s,e,i)=>{
-    const p=prices[e.ticker]?.price??0;
-    return s+(p*held[i]);
-  },0);
+  return ETFS.reduce((s,e,i)=>s+(prices[e.ticker]?.price??0)*held[i],0);
 }
 
-// Total versé = versements antérieurs + tous les achats
 function totalInvested(){
-  return (cfg.priorInvested||0) + buys.reduce((s,b)=>s+b.parts*b.price,0);
+  return (cfg.prior_invested||0) + buys.reduce((s,b)=>s+b.parts*b.price,0);
 }
 
-// DCA recommandé
 function recommendedDCA(currentValue){
-  const ml=(cfg.targetAge-cfg.age)*12;
-  const r=cfg.annualReturn/100/12;
+  const ml=(cfg.target_age-cfg.age)*12;
+  const r=cfg.annual_return/100/12;
   if(ml<=0) return 0;
   const g=Math.pow(1+r,ml);
   return Math.max(0,(cfg.target-currentValue*g)*r/(g-1));
 }
 
-// Versement du dernier mois (30 derniers jours)
 function lastMonthDeposit(){
   const now=new Date();
-  const month=now.getMonth(), year=now.getFullYear();
+  const m=now.getMonth(), y=now.getFullYear();
   return buys
-    .filter(b=>{ const d=new Date(b.date); return d.getMonth()===month&&d.getFullYear()===year; })
+    .filter(b=>{ const d=new Date(b.date); return d.getMonth()===m&&d.getFullYear()===y; })
     .reduce((s,b)=>s+b.parts*b.price,0);
 }
 
@@ -523,18 +558,17 @@ function render(){
     :'<span class="neu">Aucune position</span>';
   document.getElementById('heroInvested').textContent=eur(invested);
   document.getElementById('heroInvestedSub').textContent=
-    `${buys.length} achat${buys.length>1?'s':''}${cfg.priorInvested>0?` + ${eur(cfg.priorInvested)} antérieurs`:''}`;
+    `${buys.length} achat${buys.length>1?'s':''}${cfg.prior_invested>0?` + ${eur(cfg.prior_invested)} antérieurs`:''}`;
   document.getElementById('heroPerf').innerHTML=
     `<span class="${perf>=0?'pos':'neg'}">${sgn(perf)}%</span>`;
   document.getElementById('heroProgress').textContent=fmt(progress,2)+'%';
   document.getElementById('progFill').style.width=progress+'%';
   document.getElementById('heroProgressSub').textContent=
-    `${cfg.targetAge} ans · ${new Date().getFullYear()+(cfg.targetAge-cfg.age)}`;
+    `${cfg.target_age} ans · ${new Date().getFullYear()+(cfg.target_age-cfg.age)}`;
 
   // DCA Banner
-  const state = lastDeposit===0 ? 'on-track' : lastDeposit >= dca*0.9 ? (lastDeposit > dca*1.15 ? 'ahead' : 'on-track') : 'off-track';
-  const banner=document.getElementById('dcaBanner');
-  banner.className=`dca-banner ${state}`;
+  const state = lastDeposit===0?'on-track':lastDeposit>=dca*0.9?(lastDeposit>dca*1.15?'ahead':'on-track'):'off-track';
+  document.getElementById('dcaBanner').className=`dca-banner ${state}`;
   document.getElementById('dcaAmount').className=`dca-amount ${state}`;
   document.getElementById('dcaAmount').textContent=dca>0?eur(Math.round(dca)):'—';
   document.getElementById('dcaIcon').textContent=state==='ahead'?'🚀':state==='off-track'?'⚠️':'📈';
@@ -544,8 +578,8 @@ function render(){
     'DCA recommandé ce mois';
   document.getElementById('dcaDesc').textContent=
     lastDeposit>0
-    ?`Ce mois : ${eur(Math.round(lastDeposit))} versés · Objectif ${eur(cfg.target)} à ${cfg.targetAge} ans · ${cfg.annualReturn}%/an`
-    :`Objectif ${eur(cfg.target)} à ${cfg.targetAge} ans · hypothèse ${cfg.annualReturn}%/an`;
+    ?`Ce mois : ${eur(Math.round(lastDeposit))} versés · Objectif ${eur(cfg.target)} à ${cfg.target_age} ans · ${cfg.annual_return}%/an`
+    :`Objectif ${eur(cfg.target)} à ${cfg.target_age} ans · hypothèse ${cfg.annual_return}%/an`;
 
   renderETFs();
   renderDonut();
@@ -554,25 +588,19 @@ function render(){
 }
 
 function renderETFs(){
-  const held=partsHeld();
-  const prus=pruByEtf();
-  const totalVal=portfolioValue()||1;
-
+  const held=partsHeld(), prus=pruByEtf(), totalVal=portfolioValue()||1;
   document.getElementById('etfList').innerHTML=ETFS.map((e,i)=>{
     const p=prices[e.ticker];
-    const price=p?.price??0;
-    const prev=p?.prev??price;
+    const price=p?.price??0, prev=p?.prev??price;
     const chg=prev>0?(price-prev)/prev*100:null;
-    const val=price*held[i];
-    const pnl=(price-prus[i])*held[i];
-    const weight=val/totalVal*100;
+    const val=price*held[i], pnl=(price-prus[i])*held[i], weight=val/totalVal*100;
     return `
     <div class="etf-row">
       <div class="etf-ticker" style="color:${COLORS[i]}">${e.label}</div>
       <div class="etf-name">${e.name}<small>${held[i]>0?held[i]+' parts · PRU '+fmt(prus[i])+'€':'Aucune position'}</small></div>
       <div class="tar">${p?fmt(price)+'€':'<span class="neu">—</span>'}</div>
       <div class="tar ${chg==null?'neu':chg>=0?'pos':'neg'}">${chg!=null?sgn(chg)+'%':'—'}</div>
-      <div class="tar ${held[i]>0?'bright':''}">${held[i]>0?eur(val):'—'}</div>
+      <div class="tar">${held[i]>0?eur(val):'—'}</div>
       <div class="tar ${held[i]>0?(pnl>=0?'pos':'neg'):'neu'}">${held[i]>0?(pnl>=0?'+':'')+eur(pnl):'—'}</div>
       <div class="tar neu">${held[i]>0?fmt(weight,1)+'%':'—'}</div>
     </div>`;
@@ -612,12 +640,11 @@ function renderProjection(startVal){
   const ctx=canvas.getContext('2d');
   const W=canvas.offsetWidth||260,H=canvas.offsetHeight||130;
   canvas.width=W*2;canvas.height=H*2;ctx.scale(2,2);
-  const months=(cfg.targetAge-cfg.age)*12;
-  const r=cfg.annualReturn/100/12;
+  const months=(cfg.target_age-cfg.age)*12;
+  const r=cfg.annual_return/100/12;
   const dca=recommendedDCA(startVal);
   const target=cfg.target;
-  const pts=[];
-  let v=startVal;
+  const pts=[];let v=startVal;
   for(let m=0;m<=months;m++){if(m>0) v=v*(1+r)+dca; if(m%6===0) pts.push(v);}
   const maxV=Math.max(target*1.05,pts[pts.length-1]);
   ctx.clearRect(0,0,W,H);
@@ -639,13 +666,17 @@ function renderProjection(startVal){
   ctx.lineTo(tx(pts.length-1),H-12);ctx.closePath();ctx.fillStyle=g;ctx.fill();
   ctx.beginPath();pts.forEach((v,i)=>i===0?ctx.moveTo(tx(i),tv(v)):ctx.lineTo(tx(i),tv(v)));
   ctx.strokeStyle='#00e5b0';ctx.lineWidth=1.5;ctx.stroke();
-  document.getElementById('projEnd').textContent=`${cfg.targetAge} ans (${new Date().getFullYear()+(cfg.targetAge-cfg.age)})`;
+  document.getElementById('projEnd').textContent=`${cfg.target_age} ans (${new Date().getFullYear()+(cfg.target_age-cfg.age)})`;
+  document.getElementById('projReturnLabel').textContent=`${cfg.annual_return}%/an`;
 }
 
 function renderHistory(){
   document.getElementById('histCount').textContent=`${buys.length} achat${buys.length>1?'s':''}`;
-  if(buys.length===0){ document.getElementById('histList').innerHTML='<div class="empty">Aucun achat — clique sur "+ Achat" pour commencer.</div>'; return; }
-  const sorted=[...buys].map((b,i)=>({...b,origIdx:i})).sort((a,b)=>new Date(b.date)-new Date(a.date));
+  if(buys.length===0){
+    document.getElementById('histList').innerHTML='<div class="empty">Aucun achat — clique sur "+ Achat" pour commencer.</div>';
+    return;
+  }
+  const sorted=[...buys].sort((a,b)=>new Date(b.date)-new Date(a.date));
   document.getElementById('histList').innerHTML=sorted.map(b=>{
     const etf=ETFS[b.etfIdx];
     const versement=b.parts*b.price;
@@ -661,88 +692,120 @@ function renderHistory(){
       <span class="tar"><span class="badge pos">+${eur(versement)}</span></span>
       <span class="tar">${currentPrice?fmt(currentPrice)+' €':'<span class="neu">—</span>'}</span>
       <span class="tar ${pnl==null?'neu':pnl>=0?'pos':'neg'}">${pnl!=null?(pnl>=0?'+':'')+eur(pnl):'—'}</span>
-      <span style="color:var(--muted)">${b.note||'—'}</span>
+      <span style="color:var(--muted);font-size:10px">${b.note||'—'}</span>
+      <button class="del-btn" onclick="deleteBuy('${b.id}')" title="Supprimer">×</button>
     </div>`;
   }).join('');
 }
 
-// ── BUY MODAL ────────────────────────────────────────────────────────────────
+// ── BUY MODAL ─────────────────────────────────────────────────────────────────
 function openBuy(){
   document.getElementById('buyDate').value=new Date().toISOString().split('T')[0];
   document.getElementById('buyParts').value='';
   document.getElementById('buyPrice').value='';
   document.getElementById('buyNote').value='';
   updateBuyPreview();
-  // hint: cours actuel
   const idx=parseInt(document.getElementById('buyEtf').value);
   const p=prices[ETFS[idx].ticker]?.price;
-  document.getElementById('buyPriceHint').textContent=p?`Cours actuel : ${fmt(p)} €`:'Cours non chargé';
+  document.getElementById('buyPriceHint').textContent=p?`Cours actuel : ${fmt(p)} €`:'Cours non chargé — clique ↻ Cours';
   document.getElementById('buyOverlay').classList.add('open');
   setTimeout(()=>document.getElementById('buyParts').focus(),100);
 }
 function closeBuy(){ document.getElementById('buyOverlay').classList.remove('open'); }
 
-document.addEventListener('DOMContentLoaded',()=>{
-  document.getElementById('buyEtf').addEventListener('change',()=>{
-    const idx=parseInt(document.getElementById('buyEtf').value);
-    const p=prices[ETFS[idx].ticker]?.price;
-    document.getElementById('buyPriceHint').textContent=p?`Cours actuel : ${fmt(p)} €`:'Cours non chargé';
-    updateBuyPreview();
-  });
+document.getElementById('buyEtf').addEventListener('change',()=>{
+  const idx=parseInt(document.getElementById('buyEtf').value);
+  const p=prices[ETFS[idx].ticker]?.price;
+  document.getElementById('buyPriceHint').textContent=p?`Cours actuel : ${fmt(p)} €`:'Cours non chargé';
+  updateBuyPreview();
 });
 
 function updateBuyPreview(){
   const parts=parseFloat(document.getElementById('buyParts').value)||0;
   const price=parseFloat(document.getElementById('buyPrice').value)||0;
   const total=parts*price;
-  const cumul=totalInvested()+total;
   document.getElementById('buyPreviewTotal').textContent=total>0?eur(total):'—';
-  document.getElementById('buyPreviewCumul').textContent=total>0?eur(cumul):'—';
+  document.getElementById('buyPreviewCumul').textContent=total>0?eur(totalInvested()+total):'—';
 }
 
-function saveBuy(){
+async function saveBuy(){
   const etfIdx=parseInt(document.getElementById('buyEtf').value);
   const parts=parseFloat(document.getElementById('buyParts').value);
   const price=parseFloat(document.getElementById('buyPrice').value);
   const date=document.getElementById('buyDate').value;
   const note=document.getElementById('buyNote').value.trim();
   if(!parts||!price||!date) return;
-  buys.push({etfIdx,parts,price,date,note});
+
+  const btn=document.getElementById('saveBuyBtn');
+  btn.textContent='…'; btn.disabled=true;
+
+  const { data, error } = await sb.from('buys').insert({
+    etf_idx: etfIdx, parts, price, date, note
+  }).select().single();
+
+  btn.textContent='Enregistrer'; btn.disabled=false;
+
+  if(error){ alert('Erreur Supabase : '+error.message); return; }
+
+  buys.push({ id:data.id, etfIdx, parts, price, date, note });
   buys.sort((a,b)=>new Date(a.date)-new Date(b.date));
-  save('pea3_buys',buys);
+  setSyncStatus('ok','✓ synchronisé');
   closeBuy();
   render();
 }
 
-// ── SETTINGS ─────────────────────────────────────────────────────────────────
+async function deleteBuy(id){
+  if(!confirm('Supprimer cet achat ?')) return;
+  const { error } = await sb.from('buys').delete().eq('id', id);
+  if(error){ alert('Erreur : '+error.message); return; }
+  buys = buys.filter(b=>b.id!==id);
+  render();
+}
+
+// ── SETTINGS ──────────────────────────────────────────────────────────────────
 function openSettings(){
   document.getElementById('cfgAge').value=cfg.age;
-  document.getElementById('cfgTargetAge').value=cfg.targetAge;
+  document.getElementById('cfgTargetAge').value=cfg.target_age;
   document.getElementById('cfgTarget').value=cfg.target;
-  document.getElementById('cfgReturn').value=cfg.annualReturn;
-  document.getElementById('cfgPrior').value=cfg.priorInvested||0;
+  document.getElementById('cfgReturn').value=cfg.annual_return;
+  document.getElementById('cfgPrior').value=cfg.prior_invested||0;
   document.getElementById('settingsOverlay').classList.add('open');
 }
 function closeSettings(){ document.getElementById('settingsOverlay').classList.remove('open'); }
-function saveSettings(){
-  cfg.age=parseInt(document.getElementById('cfgAge').value)||26;
-  cfg.targetAge=parseInt(document.getElementById('cfgTargetAge').value)||50;
-  cfg.target=parseFloat(document.getElementById('cfgTarget').value)||1_000_000;
-  cfg.annualReturn=parseFloat(document.getElementById('cfgReturn').value)||7;
-  cfg.priorInvested=parseFloat(document.getElementById('cfgPrior').value)||0;
-  save('pea3_cfg',cfg);
+
+async function saveSettings(){
+  const newCfg = {
+    id: 1,
+    age: parseInt(document.getElementById('cfgAge').value)||26,
+    target_age: parseInt(document.getElementById('cfgTargetAge').value)||50,
+    target: parseFloat(document.getElementById('cfgTarget').value)||1_000_000,
+    annual_return: parseFloat(document.getElementById('cfgReturn').value)||7,
+    prior_invested: parseFloat(document.getElementById('cfgPrior').value)||0,
+  };
+
+  const btn=document.getElementById('saveCfgBtn');
+  btn.textContent='…'; btn.disabled=true;
+
+  const { error } = await sb.from('config').upsert(newCfg);
+
+  btn.textContent='Enregistrer'; btn.disabled=false;
+
+  if(error){ alert('Erreur : '+error.message); return; }
+  cfg = newCfg;
+  setSyncStatus('ok','✓ synchronisé');
   closeSettings();
   render();
 }
 
+// Click outside to close
 ['buyOverlay','settingsOverlay'].forEach(id=>{
   document.getElementById(id).addEventListener('click',function(e){ if(e.target===this) this.classList.remove('open'); });
 });
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
-render();
+loadFromSupabase();
 fetchPrices();
-setInterval(fetchPrices,5*60*1000);
+setInterval(fetchPrices, 5*60*1000);
 </script>
 </body>
 </html>
