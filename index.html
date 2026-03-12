@@ -757,11 +757,11 @@ function renderChart(currentTotal){
   const allT=pts.map(p=>p.date.getTime());
   const allV=pts.map(p=>p.value);
   const minT=Math.min(...allT),maxT=Math.max(...allT);
-  // Padding adapté à la période — serré pour 1J, large pour MAX
-  const vPad=chartFilter==='1J'?0.003:chartFilter==='1M'?0.02:0.05;
-  const vMin=Math.min(...allV),vMax=Math.max(...allV),vRange=vMax-vMin;
-  const minV=vMin-vRange*vPad-(vRange===0?vMin*vPad:0);
-  const maxV=vMax+vRange*vPad+(vRange===0?vMax*vPad:0);
+  // Padding adapté à la période — assez d'espace au-dessus du pic
+  const vPad=chartFilter==='1J'?0.15:chartFilter==='1M'?0.12:0.10;
+  const vMin=Math.min(...allV),vMax=Math.max(...allV),vRange=vMax-vMin||vMax*0.01;
+  const minV=vMin-vRange*vPad;
+  const maxV=vMax+vRange*vPad;
   const toX=d=>PAD.left+((d.getTime()-minT)/(maxT-minT))*cW;
   const toY=v=>PAD.top+(1-(v-minV)/(maxV-minV))*cH;
 
@@ -874,10 +874,10 @@ function initMainCursor(){
     const targetT=minT+frac*(maxT-minT);
     let closest=mainPts[0],minDiff=Infinity;
     mainPts.forEach(p=>{const d=Math.abs(p.date.getTime()-targetT);if(d<minDiff){minDiff=d;closest=p;}});
-    const vPad=chartFilter==='1J'?0.003:chartFilter==='1M'?0.02:0.05;
-    const vMin=Math.min(...allV),vMax=Math.max(...allV),vRange=vMax-vMin;
-    const scaleMin=vMin-vRange*vPad-(vRange===0?vMin*vPad:0);
-    const scaleMax=vMax+vRange*vPad+(vRange===0?vMax*vPad:0);
+    const vPad=chartFilter==='1J'?0.15:chartFilter==='1M'?0.12:0.10;
+    const vMin=Math.min(...allV),vMax=Math.max(...allV),vRange=vMax-vMin||vMax*0.01;
+    const scaleMin=vMin-vRange*vPad;
+    const scaleMax=vMax+vRange*vPad;
     // All coords in CSS pixels
     const xPos=PAD_L+((closest.date.getTime()-minT)/(maxT-minT))*cW;
     const yPos=PAD_T+(1-(closest.value-scaleMin)/(scaleMax-scaleMin))*cH;
@@ -926,16 +926,27 @@ function drawCursorOnCanvas(canvas){
   ctx.beginPath();ctx.arc(xPos,yPos,5,0,Math.PI*2);
   ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
 
-  // Floating label — clamp so it never overflows left/right
+  // Value label above the dot
   const labelX=Math.min(Math.max(xPos,56),W-56);
-  const labelY=Math.max(yPos-16,PAD_T+14);
+  const labelY=Math.max(yPos-14,PAD_T+14);
   ctx.textAlign='center';
   ctx.font='700 13px "Plus Jakarta Sans",sans-serif';
   ctx.fillStyle=isDark?'#e8f1f8':'#111827';
   ctx.fillText(valText,labelX,labelY);
-  ctx.font='500 10px "JetBrains Mono",monospace';
-  ctx.fillStyle=isDark?'#8899aa':'#9aa3af';
-  ctx.fillText(dateText,labelX,labelY+13);
+
+  // Date label on X axis at bottom — highlight over the axis tick
+  const axisY=H-PAD_B+13;
+  const dateX=Math.min(Math.max(xPos,42),W-42);
+  ctx.font='600 10px "JetBrains Mono",monospace';
+  // small pill background
+  const tw=ctx.measureText(dateText).width;
+  const pill={x:dateX-tw/2-5,y:axisY-11,w:tw+10,h:14,r:4};
+  ctx.fillStyle=isDark?'rgba(28,35,48,.95)':'rgba(255,255,255,.95)';
+  ctx.beginPath();
+  ctx.roundRect(pill.x,pill.y,pill.w,pill.h,pill.r);
+  ctx.fill();
+  ctx.fillStyle=color;
+  ctx.fillText(dateText,dateX,axisY);
   ctx.restore();
 }
 
