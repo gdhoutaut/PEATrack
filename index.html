@@ -672,7 +672,7 @@ function render(){
   const firstBuyDate=buys.length>0?new Date(buys.reduce((min,b)=>b.date<min?b.date:min,buys[0].date)):null;
   const yearsHeld=firstBuyDate?(new Date()-firstBuyDate)/(365.25*24*3600*1000):0;
   const cagr=yearsHeld>0.08&&invested>0?((total/invested)**(1/yearsHeld)-1)*100:null;
-  document.getElementById('kpiPerfSub').textContent='depuis l'ouverture';
+  document.getElementById('kpiPerfSub').textContent="depuis l'ouverture";
   document.getElementById('kpiPerf1Y').innerHTML=cagr!=null
     ?`<span class="${cagr>=0?'pos':'neg'}">${sgn(cagr,1)}%/an annualisé</span>`
     :'<span class="neu">< 1 mois de recul</span>';
