@@ -158,6 +158,10 @@ canvas{display:block;width:100%;height:100%;}
 .statusbar{margin-top:36px;padding-top:14px;border-top:1px solid var(--border);display:flex;justify-content:space-between;font-size:11px;color:var(--muted);}
 .live-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);margin-right:5px;animation:blink 2s ease-in-out infinite;vertical-align:middle;}
 .empty{padding:20px;color:var(--muted);font-size:13px;text-align:center;}
+.etf-detail{display:none;padding:14px 16px;background:var(--s2);border-top:1px solid var(--border);}
+.etf-detail.open{display:block;}
+.etf-detail-chart{height:80px;position:relative;}
+.etf-detail-chart canvas{display:block;width:100%;height:100%;}
 .proj-wrap{position:relative;height:110px;margin-top:10px;}
 .proj-wrap canvas{display:block;width:100%;height:100%;}
 
@@ -209,21 +213,12 @@ canvas{display:block;width:100%;height:100%;}
   </div>
 </div>
 
-<div class="dca-banner on-track" id="dcaBanner">
-  <div class="dca-left">
-    <div class="dca-emoji" id="dcaEmoji">📈</div>
-    <div>
-      <div class="dca-title" id="dcaTitle">DCA recommandé ce mois</div>
-      <div class="dca-desc" id="dcaDesc">—</div>
-    </div>
-  </div>
-  <div class="dca-amount on-track" id="dcaAmount">—</div>
-</div>
 
 <div class="chart-panel">
   <div class="chart-header">
     <div class="chart-title">Évolution du portefeuille</div>
     <div class="chart-filters">
+      <button class="cf-btn" onclick="setChartFilter('1J')">1J</button>
       <button class="cf-btn" onclick="setChartFilter('1M')">1M</button>
       <button class="cf-btn" onclick="setChartFilter('6M')">6M</button>
       <button class="cf-btn active" onclick="setChartFilter('MAX')">MAX</button>
@@ -255,15 +250,27 @@ canvas{display:block;width:100%;height:100%;}
     </div>
     <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
       <div class="panel-header" style="margin-bottom:4px">
-        <div class="panel-title">Projection DCA</div>
-        <span id="projReturnLabel" class="neu" style="font-size:10px;font-family:'JetBrains Mono',monospace">7%/an</span>
+        <div class="panel-title">Projection 2050</div>
+        <span id="projReturnLabel" class="neu" style="font-size:10px;font-family:'JetBrains Mono',monospace">7%/an · sans apport</span>
       </div>
       <div class="proj-wrap"><canvas id="projCanvas"></canvas></div>
       <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:4px;font-family:'JetBrains Mono',monospace">
-        <span>Auj.</span><span id="projEndLabel">—</span>
+        <span id="projStartLabel">Auj.</span><span>2050</span>
       </div>
+      <div id="projEndValue" style="font-size:11px;color:var(--blue);font-family:'JetBrains Mono',monospace;text-align:right;margin-top:2px">—</div>
     </div>
   </div>
+</div>
+
+<div class="dca-banner on-track" id="dcaBanner" style="margin-bottom:12px">
+  <div class="dca-left">
+    <div class="dca-emoji" id="dcaEmoji">📈</div>
+    <div>
+      <div class="dca-title" id="dcaTitle">DCA recommandé ce mois</div>
+      <div class="dca-desc" id="dcaDesc">—</div>
+    </div>
+  </div>
+  <div class="dca-amount on-track" id="dcaAmount">—</div>
 </div>
 
 <div class="history-panel">
@@ -356,6 +363,7 @@ const COLORS=['#00d4a8','#4f8ef7','#a78bfa','#f5a623'];
 let cfg={age:26,target_age:50,target:1000000,annual_return:7,prior_invested:0};
 let buys=[],prices={},historicalData={};
 let chartFilter='MAX';
+let historyCache={}; // cache by filter key
 
 const f=(n,d=2)=>n==null||isNaN(n)?'—':n.toLocaleString('fr-FR',{minimumFractionDigits:d,maximumFractionDigits:d});
 const eur=(n,d=0)=>f(n,d)+' €';
@@ -408,23 +416,51 @@ async function fetchPrices(){
   fetchHistoricalData();
 }
 
-async function fetchHistoricalData(){
+async function fetchHistoricalData(filter){
   if(buys.length===0) return;
-  const firstDate = buys.reduce((min,b)=>b.date<min?b.date:min, buys[0].date);
-  // fetch 1 week before first buy to anchor chart
-  const from = new Date(firstDate);
-  from.setDate(from.getDate()-7);
-  const fromStr = from.toISOString().split('T')[0];
+  const f = filter || chartFilter;
+
+  // Use cache unless 1J (always fresh)
+  if(f!=='1J' && historyCache[f]){
+    historicalData = historyCache[f];
+    render(); return;
+  }
+
+  // Determine interval + from date
+  let interval, fromStr;
+  const today = new Date();
+  if(f==='1J'){
+    interval = '5m';
+    const d = new Date(today); d.setDate(d.getDate()-1);
+    fromStr = d.toISOString().split('T')[0];
+  } else if(f==='1M'){
+    interval = '1d';
+    const d = new Date(today); d.setMonth(d.getMonth()-1);
+    fromStr = d.toISOString().split('T')[0];
+  } else if(f==='6M'){
+    interval = '1wk';
+    const d = new Date(today); d.setMonth(d.getMonth()-6);
+    fromStr = d.toISOString().split('T')[0];
+  } else { // MAX
+    interval = '1wk';
+    const firstDate = buys.reduce((min,b)=>b.date<min?b.date:min, buys[0].date);
+    const d = new Date(firstDate); d.setDate(d.getDate()-7);
+    fromStr = d.toISOString().split('T')[0];
+  }
+
   const results = await Promise.allSettled(
-    ETFS.map(e=>fetch(`/api/history?ticker=${encodeURIComponent(e.ticker)}&from=${fromStr}`)
+    ETFS.map(e=>fetch(`/api/history?ticker=${encodeURIComponent(e.ticker)}&from=${fromStr}&interval=${encodeURIComponent(interval)}`)
       .then(r=>r.ok?r.json():null)
       .catch(()=>null))
   );
+  const newData = {};
   results.forEach((r,i)=>{
     if(r.status==='fulfilled'&&r.value?.points){
-      historicalData[ETFS[i].ticker]=r.value.points;
+      newData[ETFS[i].ticker]=r.value.points;
     }
   });
+  historicalData = newData;
+  if(f!=='1J') historyCache[f] = newData;
   render();
 }
 
@@ -488,6 +524,8 @@ function render(){
   renderETFs();
   renderDonut();
   renderHistory();
+  // Re-render any open ETF detail charts
+  ETFS.forEach((_,i)=>{ if(document.getElementById('etfDetailPanel'+i)?.classList.contains('open')) renderEtfChart(i); });
 }
 
 function setChartFilter(f){
@@ -495,8 +533,7 @@ function setChartFilter(f){
   document.querySelectorAll('.cf-btn').forEach(btn=>{
     btn.classList.toggle('active', btn.textContent===f);
   });
-  const total=portfolioValue();
-  renderChart(total);
+  fetchHistoricalData(f);
 }
 
 function renderChart(currentTotal){
@@ -527,10 +564,13 @@ function renderChart(currentTotal){
   const sortedBuys=[...buys].sort((a,b)=>a.date.localeCompare(b.date));
 
   const pts=[];
+  const isIntraday=chartFilter==='1J';
   allDates.forEach(dateStr=>{
+    // For intraday: use date portion for buy comparison
+    const dateForBuyComp=isIntraday?dateStr.split('T')[0]:dateStr;
     // Parts held on this date
     const held=[0,0,0,0];
-    sortedBuys.forEach(b=>{ if(b.date<=dateStr) held[b.etfIdx]+=b.parts; });
+    sortedBuys.forEach(b=>{ if(b.date<=dateForBuyComp) held[b.etfIdx]+=b.parts; });
     if(held.every(h=>h===0)) return; // no position yet
 
     // Portfolio value on this date
@@ -538,26 +578,14 @@ function renderChart(currentTotal){
     ETFS.forEach((e,i)=>{
       const hist=historicalData[e.ticker];
       if(!hist||held[i]===0) return;
-      // Find closest price on or before this date
       const p=hist.find(p=>p.date===dateStr)||hist.filter(p=>p.date<=dateStr).pop();
       if(p) val+=p.close*held[i];
     });
     if(val>0) pts.push({date:new Date(dateStr),value:val});
   });
 
-  // Add today's value
-  if(currentTotal>0) pts.push({date:new Date(),value:currentTotal});
-
-  // Apply time filter
-  if(chartFilter!=='MAX'){
-    const now=new Date();
-    const cutoff=new Date(now);
-    if(chartFilter==='1M') cutoff.setMonth(cutoff.getMonth()-1);
-    else if(chartFilter==='6M') cutoff.setMonth(cutoff.getMonth()-6);
-    const filtered=pts.filter(p=>p.date>=cutoff);
-    // always keep at least 2 points
-    if(filtered.length>=2) pts.splice(0,pts.length,...filtered);
-  }
+  // Add today's value (not for 1J — intraday data already current)
+  if(currentTotal>0 && chartFilter!=='1J') pts.push({date:new Date(),value:currentTotal});
 
   if(pts.length<2){
     ctx.fillStyle='rgba(74,100,120,.5)';ctx.font='13px Bricolage Grotesque';
@@ -585,11 +613,42 @@ function renderChart(currentTotal){
     ctx.fillText(label,PAD.left-6,y+3);
   }
 
-  // X labels — show months if < 1 year, years if longer
+  // X labels — adapt to filter
   const spanMs=maxT-minT;
   const spanDays=spanMs/(1000*60*60*24);
   ctx.textAlign='center';ctx.fillStyle='rgba(74,100,120,.8)';
-  if(spanDays<=400){
+  if(chartFilter==='1J'){
+    // Show hours — every 2h
+    const startD=new Date(minT);
+    let d=new Date(startD.getFullYear(),startD.getMonth(),startD.getDate(),startD.getHours(),0,0);
+    const endD=new Date(maxT);
+    while(d<=endD){
+      if(d.getTime()>=minT){
+        const x=toX(d);
+        const label=d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+        ctx.fillText(label,x,H-PAD.bottom+14);
+        ctx.strokeStyle='rgba(25,35,48,.4)';ctx.lineWidth=.5;ctx.setLineDash([2,4]);
+        ctx.beginPath();ctx.moveTo(x,PAD.top);ctx.lineTo(x,PAD.top+cH);ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      d=new Date(d.getTime()+2*60*60*1000);
+    }
+  } else if(spanDays<=40){
+    // Show days
+    const startD=new Date(minT),endD=new Date(maxT);
+    let d=new Date(startD.getFullYear(),startD.getMonth(),startD.getDate());
+    while(d<=endD){
+      if(d.getTime()>=minT){
+        const x=toX(d);
+        const label=d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short'});
+        ctx.fillText(label,x,H-PAD.bottom+14);
+        ctx.strokeStyle='rgba(25,35,48,.4)';ctx.lineWidth=.5;ctx.setLineDash([2,4]);
+        ctx.beginPath();ctx.moveTo(x,PAD.top);ctx.lineTo(x,PAD.top+cH);ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      d=new Date(d.getTime()+7*24*60*60*1000); // every week
+    }
+  } else if(spanDays<=400){
     // Show months
     const startD=new Date(minT),endD=new Date(maxT);
     let d=new Date(startD.getFullYear(),startD.getMonth(),1);
@@ -642,62 +701,69 @@ function renderProjection(currentTotal){
   const W=canvas.offsetWidth||260,H=canvas.offsetHeight||110;
   canvas.width=W*2;canvas.height=H*2;ctx.scale(2,2);
   ctx.clearRect(0,0,W,H);
-  const PAD={top:8,right:8,bottom:28,left:52};
+  const PAD={top:8,right:8,bottom:24,left:52};
   const cW=W-PAD.left-PAD.right,cH=H-PAD.top-PAD.bottom;
 
-  const dca=recommendedDCA(currentTotal||1000);
-  const r=cfg.annual_return/100/12;
-  const mLeft=(cfg.target_age-cfg.age)*12;
+  // Pure compound growth, no DCA — just current value × (1+r)^years
   const today=new Date();
+  const targetYear=2050;
+  const yearsLeft=targetYear-today.getFullYear();
+  const r=cfg.annual_return/100;
+  const startVal=currentTotal||0;
   const pts=[];
-  let v=currentTotal||1000;
-  for(let m=0;m<=mLeft;m+=6){
-    if(m>0){for(let mm=0;mm<6;mm++) v=v*(1+r)+dca;}
-    pts.push({date:new Date(today.getFullYear(),today.getMonth()+m,1),value:v});
+  for(let y=0;y<=yearsLeft;y+=1){
+    pts.push({
+      year:today.getFullYear()+y,
+      value:startVal*Math.pow(1+r,y)
+    });
   }
 
-  const allT=pts.map(p=>p.date.getTime());
-  const allV=pts.map(p=>p.value);
-  const minT=Math.min(...allT),maxT=Math.max(...allT);
-  const minV=0,maxV=Math.max(cfg.target*1.05,Math.max(...allV));
+  const endVal=pts[pts.length-1].value;
+  const minV=0,maxV=Math.max(1000000,endVal*1.05);
+  const minY=today.getFullYear(),maxY=targetYear;
 
-  const toX=d=>PAD.left+((d.getTime()-minT)/(maxT-minT))*cW;
+  const toX=y=>PAD.left+((y-minY)/(maxY-minY))*cW;
   const toY=v=>PAD.top+(1-(v-minV)/(maxV-minV))*cH;
 
   // Y grid
   [0.25,0.5,0.75,1].forEach(frac=>{
-    const v2=minV+(maxV-minV)*frac,y=toY(v2);
+    const v=maxV*frac,y=toY(v);
     ctx.strokeStyle='rgba(25,35,48,.9)';ctx.lineWidth=.5;
     ctx.beginPath();ctx.moveTo(PAD.left,y);ctx.lineTo(PAD.left+cW,y);ctx.stroke();
     ctx.fillStyle='rgba(74,100,120,.8)';ctx.font='8px JetBrains Mono';ctx.textAlign='right';
-    const label=v2>=1000000?f(v2/1000000,1)+'M':v2>=1000?f(v2/1000,0)+'k':'0';
+    const label=v>=1000000?f(v/1000000,1)+'M':v>=1000?f(v/1000,0)+'k':'0';
     ctx.fillText(label+'€',PAD.left-4,y+3);
   });
 
-  // Target line
-  const ty=toY(cfg.target);
-  ctx.strokeStyle='rgba(240,80,110,.35)';ctx.lineWidth=1;ctx.setLineDash([3,4]);
-  ctx.beginPath();ctx.moveTo(PAD.left,ty);ctx.lineTo(PAD.left+cW,ty);ctx.stroke();
-  ctx.setLineDash([]);
-
-  // X labels (start + end year)
-  ctx.fillStyle='rgba(74,100,120,.8)';ctx.font='8px JetBrains Mono';ctx.textAlign='center';
-  ctx.fillText(today.getFullYear(),toX(pts[0].date),H-PAD.bottom+12);
-  ctx.fillText(new Date(maxT).getFullYear(),toX(pts[pts.length-1].date),H-PAD.bottom+12);
+  // 1M€ target line
+  if(1000000<=maxV){
+    const ty=toY(1000000);
+    ctx.strokeStyle='rgba(240,80,110,.35)';ctx.lineWidth=1;ctx.setLineDash([3,4]);
+    ctx.beginPath();ctx.moveTo(PAD.left,ty);ctx.lineTo(PAD.left+cW,ty);ctx.stroke();
+    ctx.setLineDash([]);
+  }
 
   // Area + line
   const g=ctx.createLinearGradient(0,PAD.top,0,PAD.top+cH);
   g.addColorStop(0,'rgba(79,142,247,.2)');g.addColorStop(1,'rgba(79,142,247,0)');
-  ctx.beginPath();ctx.moveTo(toX(pts[0].date),PAD.top+cH);
-  pts.forEach(p=>ctx.lineTo(toX(p.date),toY(p.value)));
-  ctx.lineTo(toX(pts[pts.length-1].date),PAD.top+cH);
+  ctx.beginPath();ctx.moveTo(toX(pts[0].year),PAD.top+cH);
+  pts.forEach(p=>ctx.lineTo(toX(p.year),toY(p.value)));
+  ctx.lineTo(toX(pts[pts.length-1].year),PAD.top+cH);
   ctx.closePath();ctx.fillStyle=g;ctx.fill();
-  ctx.beginPath();pts.forEach((p,i)=>i===0?ctx.moveTo(toX(p.date),toY(p.value)):ctx.lineTo(toX(p.date),toY(p.value)));
-  ctx.strokeStyle='rgba(79,142,247,.8)';ctx.lineWidth=1.5;ctx.setLineDash([4,4]);ctx.stroke();ctx.setLineDash([]);
 
-  // Labels
-  document.getElementById('projEndLabel').textContent=`${cfg.target_age} ans (${today.getFullYear()+(cfg.target_age-cfg.age)})`;
-  document.getElementById('projReturnLabel').textContent=`${cfg.annual_return}%/an`;
+  ctx.beginPath();pts.forEach((p,i)=>i===0?ctx.moveTo(toX(p.year),toY(p.value)):ctx.lineTo(toX(p.year),toY(p.value)));
+  ctx.strokeStyle='rgba(79,142,247,.85)';ctx.lineWidth=1.5;ctx.stroke();
+
+  // X milestone labels
+  ctx.fillStyle='rgba(74,100,120,.8)';ctx.font='8px JetBrains Mono';ctx.textAlign='center';
+  [today.getFullYear(),2030,2040,2050].forEach(y=>{
+    if(y>=minY&&y<=maxY) ctx.fillText(y,toX(y),H-PAD.bottom+12);
+  });
+
+  // End value label
+  const endEl=document.getElementById('projEndValue');
+  if(endEl) endEl.textContent='→ '+eur(Math.round(endVal))+' en 2050';
+  document.getElementById('projReturnLabel').textContent=`${cfg.annual_return}%/an · sans apport`;
 }
 
 function renderETFs(){
@@ -706,15 +772,86 @@ function renderETFs(){
     const p=prices[e.ticker],price=p?.price??0,prev=p?.prev??price;
     const chg=prev>0?(price-prev)/prev*100:null;
     const val=price*held[i],pnl=(price-prus[i])*held[i],w=val/totalVal*100;
-    return `<tr>
+    return `<tr style="cursor:pointer" onclick="toggleEtfDetail(${i})">
       <td><div class="etf-ticker" style="color:${COLORS[i]}">${e.label}</div>
       <div class="etf-meta">${held[i]>0?held[i]+' pts · PRU '+f(prus[i])+'€':e.zone}</div></td>
       <td>${p?f(price)+'€':'<span class="neu">—</span>'}</td>
       <td class="${chg==null?'neu':chg>=0?'pos':'neg'}">${chg!=null?sgn(chg)+'%':'—'}</td>
       <td>${held[i]>0?eur(val):'<span class="neu">—</span>'}</td>
       <td class="${held[i]>0?(pnl>=0?'pos':'neg'):'neu'}">${held[i]>0?(pnl>=0?'+':'')+eur(pnl):'—'}</td>
-      <td class="neu">${held[i]>0?f(w,1)+'%':'—'}</td></tr>`;
+      <td class="neu">${held[i]>0?f(w,1)+'%':'—'} <span style="color:var(--muted);font-size:10px">▾</span></td>
+    </tr>
+    <tr id="etfDetail${i}"><td colspan="6" style="padding:0">
+      <div class="etf-detail" id="etfDetailPanel${i}">
+        <div style="font-size:10px;color:var(--muted2);margin-bottom:6px;font-family:'JetBrains Mono',monospace">${e.name} · cours ${chartFilter}</div>
+        <div class="etf-detail-chart"><canvas id="etfCanvas${i}"></canvas></div>
+      </div>
+    </td></tr>`;
   }).join('');
+}
+
+function toggleEtfDetail(i){
+  const panel=document.getElementById('etfDetailPanel'+i);
+  panel.classList.toggle('open');
+  if(panel.classList.contains('open')) renderEtfChart(i);
+}
+
+function renderEtfChart(i){
+  const canvas=document.getElementById('etfCanvas'+i);
+  if(!canvas) return;
+  const ctx=canvas.getContext('2d');
+  const W=canvas.offsetWidth||500,H=80;
+  canvas.width=W*2;canvas.height=H*2;ctx.scale(2,2);
+  ctx.clearRect(0,0,W,H);
+
+  const ticker=ETFS[i].ticker;
+  const hist=historicalData[ticker];
+  if(!hist||hist.length<2){
+    ctx.fillStyle='rgba(74,100,120,.5)';ctx.font='11px Bricolage Grotesque';
+    ctx.textAlign='center';ctx.fillText('Données non disponibles',W/2,H/2);
+    return;
+  }
+
+  const PAD={top:6,right:6,bottom:18,left:6};
+  const cW=W-PAD.left-PAD.right,cH=H-PAD.top-PAD.bottom;
+  const closes=hist.map(p=>parseFloat(p.close));
+  const minV=Math.min(...closes)*0.995,maxV=Math.max(...closes)*1.005;
+  const toX=(_,idx)=>PAD.left+(idx/(hist.length-1))*cW;
+  const toY=v=>PAD.top+(1-(v-minV)/(maxV-minV))*cH;
+
+  const color=COLORS[i];
+  const colorRgb=color==='#00d4a8'?'0,212,168':color==='#4f8ef7'?'79,142,247':color==='#a78bfa'?'167,139,250':'245,166,35';
+
+  // Area
+  const g=ctx.createLinearGradient(0,PAD.top,0,PAD.top+cH);
+  g.addColorStop(0,`rgba(${colorRgb},.25)`);g.addColorStop(1,`rgba(${colorRgb},0)`);
+  ctx.beginPath();ctx.moveTo(toX(null,0),PAD.top+cH);
+  hist.forEach((_,idx)=>ctx.lineTo(toX(null,idx),toY(closes[idx])));
+  ctx.lineTo(toX(null,hist.length-1),PAD.top+cH);
+  ctx.closePath();ctx.fillStyle=g;ctx.fill();
+
+  // Line
+  ctx.beginPath();hist.forEach((_,idx)=>idx===0?ctx.moveTo(toX(null,idx),toY(closes[idx])):ctx.lineTo(toX(null,idx),toY(closes[idx])));
+  ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.stroke();
+
+  // Min/max labels
+  const minIdx=closes.indexOf(Math.min(...closes));
+  const maxIdx=closes.indexOf(Math.max(...closes));
+  ctx.font='8px JetBrains Mono';ctx.fillStyle='rgba(74,100,120,.9)';
+  ctx.textAlign='center';
+  ctx.fillText(f(closes[minIdx])+'€',Math.min(Math.max(toX(null,minIdx),20),W-20),H-PAD.bottom+12);
+  ctx.fillText(f(closes[maxIdx])+'€',Math.min(Math.max(toX(null,maxIdx),20),W-20),PAD.top+10);
+
+  // PRU line
+  const prus=pruByEtf();
+  if(prus[i]>0&&prus[i]>=minV&&prus[i]<=maxV){
+    const py=toY(prus[i]);
+    ctx.strokeStyle='rgba(245,166,35,.5)';ctx.lineWidth=1;ctx.setLineDash([3,3]);
+    ctx.beginPath();ctx.moveTo(PAD.left,py);ctx.lineTo(PAD.left+cW,py);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle='rgba(245,166,35,.7)';ctx.textAlign='left';ctx.font='8px JetBrains Mono';
+    ctx.fillText('PRU '+f(prus[i])+'€',PAD.left+2,py-3);
+  }
 }
 
 function renderDonut(){
