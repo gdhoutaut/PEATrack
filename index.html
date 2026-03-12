@@ -852,40 +852,81 @@ function renderChart(currentTotal){
   ctx.beginPath();ctx.arc(toX(lp.date),toY(lp.value),4,0,Math.PI*2);
   ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
 
-  // Store scale for tooltip
-  canvas._chartMeta={toX,toY,PAD,minT,maxT,minV,maxV,W,H};
+  // Store scale for tooltip + cursor dot
+  canvas._chartMeta={toX,toY,PAD,minT,maxT,minV,maxV,W,H,lineColor,pts};
 }
 
-// ── TOOLTIP ───────────────────────────────────────────────────────────────────
+// ── TOOLTIP + CURSOR DOT ─────────────────────────────────────────────────────
 function setupTooltip(canvasId, tooltipId, valId, dateId, getPts, isProj){
   const canvas=document.getElementById(canvasId);
   const tooltip=document.getElementById(tooltipId);
   if(!canvas||!tooltip) return;
+  const cursorCanvas=isProj?null:document.getElementById('mainCursor');
+
+  function drawCursor(xPos, yPos, color){
+    if(!cursorCanvas) return;
+    const W=cursorCanvas.offsetWidth||700,H=cursorCanvas.offsetHeight||220;
+    cursorCanvas.width=W*2;cursorCanvas.height=H*2;
+    const ctx=cursorCanvas.getContext('2d');
+    ctx.scale(2,2);
+    ctx.clearRect(0,0,W,H);
+    // Vertical hairline
+    const PAD_T=12,PAD_B=34;
+    ctx.strokeStyle='rgba(150,170,190,.35)';ctx.lineWidth=1;ctx.setLineDash([4,4]);
+    ctx.beginPath();ctx.moveTo(xPos,PAD_T);ctx.lineTo(xPos,H-PAD_B);ctx.stroke();
+    ctx.setLineDash([]);
+    // Outer glow ring
+    ctx.beginPath();ctx.arc(xPos,yPos,8,0,Math.PI*2);
+    ctx.fillStyle=color.replace(')',', .15)').replace('rgb(','rgba(').replace('#','');
+    // simpler: just use rgba directly
+    ctx.fillStyle=`rgba(${hexToRgb(color)},.18)`;ctx.fill();
+    // Dot
+    ctx.beginPath();ctx.arc(xPos,yPos,4.5,0,Math.PI*2);
+    ctx.fillStyle=color;ctx.fill();
+    ctx.beginPath();ctx.arc(xPos,yPos,4.5,0,Math.PI*2);
+    ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
+  }
+
+  function clearCursor(){
+    if(!cursorCanvas) return;
+    const ctx=cursorCanvas.getContext('2d');
+    ctx.clearRect(0,0,cursorCanvas.width,cursorCanvas.height);
+  }
 
   function onMove(e){
     const pts=getPts();
-    if(!pts||pts.length<2){tooltip.classList.remove('visible');return;}
+    if(!pts||pts.length<2){tooltip.classList.remove('visible');clearCursor();return;}
     const rect=canvas.getBoundingClientRect();
     const clientX=e.touches?e.touches[0].clientX:e.clientX;
     const mouseX=(clientX-rect.left);
-    const pxRatio=canvas.width/(rect.width||1)/2;
-    // find closest point by x
-    const W=rect.width;
+    const W=rect.width,H=rect.height;
     const allT=pts.map(p=>p.date?p.date.getTime():p.year*365.25*86400000);
+    const allV=pts.map(p=>p.value);
     const minT=Math.min(...allT),maxT=Math.max(...allT);
-    const PAD_L=isProj?52:72,PAD_R=isProj?8:14;
-    const cW=W-PAD_L-PAD_R;
+    const minV=Math.min(...allV),maxV=Math.max(...allV);
+    const PAD_L=isProj?52:72,PAD_R=isProj?8:14,PAD_T=isProj?8:12,PAD_B=isProj?24:34;
+    const cW=W-PAD_L-PAD_R,cH=H-PAD_T-PAD_B;
     const frac=Math.max(0,Math.min(1,(mouseX-PAD_L)/cW));
     const targetT=minT+frac*(maxT-minT);
     let closest=pts[0],minDiff=Infinity;
     pts.forEach(p=>{
       const t=p.date?p.date.getTime():p.year*365.25*86400000;
-      const diff=Math.abs(t-targetT);
-      if(diff<minDiff){minDiff=diff;closest=p;}
+      if(Math.abs(t-targetT)<minDiff){minDiff=Math.abs(t-targetT);closest=p;}
     });
-    const xPos=PAD_L+((closest.date?closest.date.getTime():closest.year*365.25*86400000)-minT)/(maxT-minT)*cW;
+    const t=closest.date?closest.date.getTime():closest.year*365.25*86400000;
+
+    // Recalc y using actual chart padding/scale
+    const vPad=chartFilter==='1J'?0.003:chartFilter==='1M'?0.02:0.05;
+    const vMin2=Math.min(...allV),vMax2=Math.max(...allV),vRange=vMax2-vMin2;
+    const scaleMin=vMin2-vRange*vPad-(vRange===0?vMin2*vPad:0);
+    const scaleMax=vMax2+vRange*vPad+(vRange===0?vMax2*vPad:0);
+
+    const xPos=PAD_L+((t-minT)/(maxT-minT))*cW;
+    const yPos=PAD_T+(1-(closest.value-scaleMin)/(scaleMax-scaleMin))*cH;
+
+    // Tooltip position
     tooltip.style.left=Math.min(Math.max(xPos,60),W-60)+'px';
-    tooltip.style.top=isProj?'0px':'-50px';
+    tooltip.style.top=isProj?'0px':Math.max(4,yPos-52)+'px';
     document.getElementById(valId).textContent=eur(Math.round(closest.value));
     if(isProj){
       document.getElementById(dateId).textContent=closest.year||'';
@@ -896,12 +937,33 @@ function setupTooltip(canvasId, tooltipId, valId, dateId, getPts, isProj){
         :d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'});
     }
     tooltip.classList.add('visible');
+
+    // Draw cursor dot on overlay canvas
+    if(!isProj){
+      const meta=canvas._chartMeta;
+      const color=meta?.lineColor||'#00b896';
+      drawCursor(xPos,yPos,color);
+    }
   }
-  function onLeave(){tooltip.classList.remove('visible');}
+
+  function onLeave(){
+    tooltip.classList.remove('visible');
+    clearCursor();
+    // Redraw permanent last dot
+    if(!isProj) render();
+  }
+
   canvas.addEventListener('mousemove',onMove);
   canvas.addEventListener('mouseleave',onLeave);
   canvas.addEventListener('touchmove',onMove,{passive:true});
   canvas.addEventListener('touchend',onLeave);
+}
+
+function hexToRgb(hex){
+  hex=hex.replace('#','');
+  if(hex.length===3) hex=hex.split('').map(x=>x+x).join('');
+  const n=parseInt(hex,16);
+  return `${(n>>16)&255},${(n>>8)&255},${n&255}`;
 }
 
 // ── PROJECTION ────────────────────────────────────────────────────────────────
