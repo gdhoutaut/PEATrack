@@ -375,10 +375,7 @@ canvas{display:block;width:100%;height:100%;}
   </div>
   <div class="chart-wrap" style="position:relative">
     <canvas id="mainCanvas"></canvas>
-    <div class="chart-tooltip" id="mainTooltip">
-      <div class="chart-tooltip-val" id="ttVal">—</div>
-      <div class="chart-tooltip-date" id="ttDate">—</div>
-    </div>
+
   </div>
 </div>
 
@@ -863,28 +860,44 @@ function setupTooltip(canvasId, tooltipId, valId, dateId, getPts, isProj){
   if(!canvas||!tooltip) return;
   const cursorCanvas=isProj?null:document.getElementById('mainCursor');
 
-  function drawCursor(xPos, yPos, color){
+  function drawCursor(xPos, yPos, color, valText, dateText){
     if(!cursorCanvas) return;
     const W=cursorCanvas.offsetWidth||700,H=cursorCanvas.offsetHeight||220;
     cursorCanvas.width=W*2;cursorCanvas.height=H*2;
     const ctx=cursorCanvas.getContext('2d');
     ctx.scale(2,2);
     ctx.clearRect(0,0,W,H);
-    // Vertical hairline
     const PAD_T=12,PAD_B=34;
-    ctx.strokeStyle='rgba(150,170,190,.35)';ctx.lineWidth=1;ctx.setLineDash([4,4]);
+
+    // Vertical hairline
+    ctx.strokeStyle='rgba(150,170,190,.3)';ctx.lineWidth=1;ctx.setLineDash([3,4]);
     ctx.beginPath();ctx.moveTo(xPos,PAD_T);ctx.lineTo(xPos,H-PAD_B);ctx.stroke();
     ctx.setLineDash([]);
-    // Outer glow ring
-    ctx.beginPath();ctx.arc(xPos,yPos,8,0,Math.PI*2);
-    ctx.fillStyle=color.replace(')',', .15)').replace('rgb(','rgba(').replace('#','');
-    // simpler: just use rgba directly
-    ctx.fillStyle=`rgba(${hexToRgb(color)},.18)`;ctx.fill();
+
+    // Glow ring
+    ctx.beginPath();ctx.arc(xPos,yPos,9,0,Math.PI*2);
+    ctx.fillStyle=`rgba(${hexToRgb(color)},.15)`;ctx.fill();
     // Dot
-    ctx.beginPath();ctx.arc(xPos,yPos,4.5,0,Math.PI*2);
+    ctx.beginPath();ctx.arc(xPos,yPos,5,0,Math.PI*2);
     ctx.fillStyle=color;ctx.fill();
-    ctx.beginPath();ctx.arc(xPos,yPos,4.5,0,Math.PI*2);
-    ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
+    ctx.beginPath();ctx.arc(xPos,yPos,5,0,Math.PI*2);
+    ctx.strokeStyle='#fff';ctx.lineWidth=2.5;ctx.stroke();
+
+    // Floating label — value bold, date small below
+    const labelX=Math.min(Math.max(xPos, 52), W-52);
+    const labelY=Math.max(yPos-18, PAD_T+4);
+    const isDark=document.documentElement.getAttribute('data-theme')==='dark';
+    const textColor=isDark?'#e8f1f8':'#111827';
+    const subColor=isDark?'#8899aa':'#9aa3af';
+
+    ctx.font='700 13px "Plus Jakarta Sans", sans-serif';
+    ctx.textAlign='center';
+    ctx.fillStyle=textColor;
+    ctx.fillText(valText, labelX, labelY);
+
+    ctx.font='500 10px "JetBrains Mono", monospace';
+    ctx.fillStyle=subColor;
+    ctx.fillText(dateText, labelX, labelY+13);
   }
 
   function clearCursor(){
@@ -925,31 +938,28 @@ function setupTooltip(canvasId, tooltipId, valId, dateId, getPts, isProj){
     const yPos=PAD_T+(1-(closest.value-scaleMin)/(scaleMax-scaleMin))*cH;
 
     // Tooltip position
-    tooltip.style.left=Math.min(Math.max(xPos,60),W-60)+'px';
-    tooltip.style.top=isProj?'0px':Math.max(4,yPos-52)+'px';
-    document.getElementById(valId).textContent=eur(Math.round(closest.value));
+    // Format label texts
+    const valText=eur(Math.round(closest.value));
+    let dateText='';
     if(isProj){
-      document.getElementById(dateId).textContent=closest.year||'';
+      dateText=String(closest.year||'');
     } else {
       const d=closest.date;
-      document.getElementById(dateId).textContent=chartFilter==='1J'
+      dateText=chartFilter==='1J'
         ?d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})
         :d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'});
     }
-    tooltip.classList.add('visible');
 
-    // Draw cursor dot on overlay canvas
+    // Draw cursor dot + floating label on overlay canvas
     if(!isProj){
       const meta=canvas._chartMeta;
       const color=meta?.lineColor||'#00b896';
-      drawCursor(xPos,yPos,color);
+      drawCursor(xPos,yPos,color,valText,dateText);
     }
   }
 
   function onLeave(){
-    tooltip.classList.remove('visible');
     clearCursor();
-    // Redraw permanent last dot
     if(!isProj) render();
   }
 
