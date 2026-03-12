@@ -760,7 +760,11 @@ function renderChart(currentTotal){
   const allT=pts.map(p=>p.date.getTime());
   const allV=pts.map(p=>p.value);
   const minT=Math.min(...allT),maxT=Math.max(...allT);
-  const minV=Math.min(...allV)*0.94,maxV=Math.max(...allV)*1.06;
+  // Padding adapté à la période — serré pour 1J, large pour MAX
+  const vPad=chartFilter==='1J'?0.003:chartFilter==='1M'?0.02:0.05;
+  const vMin=Math.min(...allV),vMax=Math.max(...allV),vRange=vMax-vMin;
+  const minV=vMin-vRange*vPad-(vRange===0?vMin*vPad:0);
+  const maxV=vMax+vRange*vPad+(vRange===0?vMax*vPad:0);
   const toX=d=>PAD.left+((d.getTime()-minT)/(maxT-minT))*cW;
   const toY=v=>PAD.top+(1-(v-minV)/(maxV-minV))*cH;
 
