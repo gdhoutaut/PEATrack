@@ -476,22 +476,30 @@ async function loadFromSupabase(){
 
 // ── PRICES ────────────────────────────────────────────────────────────────────
 async function fetchPrice(ticker){
-  const yahooUrl=`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=2d`;
-  const proxies = [
-    `https://corsproxy.io/?url=${encodeURIComponent(yahooUrl)}`,
-    `https://api.allorigins.win/raw?url=${encodeURIComponent(yahooUrl)}`,
-    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(yahooUrl)}`,
+  const urls = [
+    `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=2d`,
+    `https://query2.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=2d`,
   ];
-  for(const proxy of proxies){
+  for(const url of urls){
     try{
-      const r=await fetch(proxy,{signal:AbortSignal.timeout(8000)});
+      const r = await fetch(url, { signal: AbortSignal.timeout(8000), headers: {'Accept':'application/json'} });
       if(!r.ok) continue;
-      const d=await r.json();
-      const m=d?.chart?.result?.[0]?.meta;
+      const d = await r.json();
+      const m = d?.chart?.result?.[0]?.meta;
       if(!m) continue;
-      return { price: m.regularMarketPrice??m.previousClose, prev: m.previousClose };
+      return { price: m.regularMarketPrice ?? m.previousClose, prev: m.previousClose };
     }catch{ continue; }
   }
+  try {
+    const r = await fetch(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${ticker}`, {
+      signal: AbortSignal.timeout(8000), headers: {'Accept':'application/json'}
+    });
+    if(r.ok){
+      const d = await r.json();
+      const q = d?.quoteResponse?.result?.[0];
+      if(q) return { price: q.regularMarketPrice ?? q.previousClose, prev: q.regularMarketPreviousClose };
+    }
+  }catch{}
   return null;
 }
 
