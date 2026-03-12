@@ -21,6 +21,23 @@
   --shadow:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
   --shadow-md:0 4px 16px rgba(0,0,0,.08),0 1px 3px rgba(0,0,0,.04);
 }
+[data-theme="dark"] {
+  --bg:#07090d; --s1:#0f1318; --s2:#141a22; --s3:#1a2230;
+  --border:#1e2d3d; --border2:#243547;
+  --accent:#00d4a8; --accent-light:rgba(0,212,168,.1);
+  --blue:#4f8ef7; --blue-light:rgba(79,142,247,.1);
+  --amber:#f5a623; --amber-light:rgba(245,166,35,.1);
+  --red:#f0506e; --red-light:rgba(240,80,110,.1);
+  --muted:#4a6478; --muted2:#6b8a9e;
+  --text:#b8cdd8; --dark:#ddeef8; --white:#f0f8ff;
+  --shadow:0 1px 3px rgba(0,0,0,.3),0 1px 2px rgba(0,0,0,.2);
+  --shadow-md:0 4px 16px rgba(0,0,0,.4),0 1px 3px rgba(0,0,0,.3);
+}
+[data-theme="dark"] .field input,[data-theme="dark"] .field select{color:var(--dark);}
+[data-theme="dark"] .modal{background:var(--s2);}
+[data-theme="dark"] body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;background-image:linear-gradient(var(--s2) 1px,transparent 1px),linear-gradient(90deg,var(--s2) 1px,transparent 1px);background-size:48px 48px;opacity:.25;}
+[data-theme="dark"] .kpi:first-child{background:linear-gradient(135deg,#00b896 0%,#006b5a 100%);}
+.theme-toggle{font-size:16px;padding:6px 10px;}
 *{margin:0;padding:0;box-sizing:border-box;}
 body{background:var(--bg);color:var(--text);font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;line-height:1.5;min-height:100vh;}
 .mono{font-family:'JetBrains Mono',monospace;}
@@ -274,6 +291,7 @@ canvas{display:block;width:100%;height:100%;}
   <div class="brand">PEA<span>·</span>track <sub>Trade Republic</sub></div>
   <div class="header-right">
     <div class="sync-pill loading" id="syncPill"><span class="sync-dot"></span><span id="syncText">connexion…</span></div>
+    <button class="btn theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Changer de thème">☀️</button>
     <button class="btn" onclick="fetchPrices()"><span id="refreshIco">↻</span> Actualiser</button>
     <button class="btn" onclick="openSettings()">⚙ Config</button>
     <button class="btn primary" onclick="openBuy()">+ Achat</button>
@@ -548,8 +566,8 @@ async function fetchHistoricalData(filter){
   const today=new Date();
   if(f==='1J'){
     interval='5m';
-    const d=new Date(today);d.setDate(d.getDate()-1);
-    fromStr=d.toISOString().split('T')[0];
+    // Use today only — Yahoo returns intraday for the current trading day
+    fromStr=today.toISOString().split('T')[0];
   } else if(f==='1M'){
     interval='1d';
     const d=new Date(today);d.setMonth(d.getMonth()-1);
@@ -662,10 +680,13 @@ function renderChart(currentTotal){
   const refTicker=tickers[0];
   let allDates=historicalData[refTicker].map(p=>p.date).sort();
 
-  // Filter market hours for 1J
+  // Filter market hours for 1J — today's session only (08:00–16:30 UTC)
   if(chartFilter==='1J'){
+    const todayStr=new Date().toISOString().split('T')[0];
     allDates=allDates.filter(d=>{
       const dt=new Date(d);
+      // Must be today (UTC date)
+      if(dt.toISOString().split('T')[0]!==todayStr) return false;
       const h=dt.getUTCHours(),m=dt.getUTCMinutes();
       const mins=h*60+m;
       return mins>=MARKET_OPEN_H*60 && mins<=MARKET_CLOSE_H*60+MARKET_CLOSE_M;
@@ -1161,6 +1182,27 @@ window.addEventListener('load',()=>{
   setupTooltip('mainCanvas','mainTooltip','ttVal','ttDate',()=>mainPts,false);
   setupTooltip('projCanvas','projTooltip','projTtVal','projTtDate',()=>projPts,true);
 });
+
+// ── THEME ─────────────────────────────────────────────────────────────────────
+function toggleTheme(){
+  const isDark=document.documentElement.getAttribute('data-theme')==='dark';
+  const newTheme=isDark?'light':'dark';
+  document.documentElement.setAttribute('data-theme',newTheme);
+  localStorage.setItem('pea-theme',newTheme);
+  document.getElementById('themeToggle').textContent=newTheme==='dark'?'☀️':'🌙';
+  // Redraw canvas after theme switch
+  setTimeout(()=>render(),50);
+}
+// Restore saved theme
+(function(){
+  const saved=localStorage.getItem('pea-theme')||'light';
+  if(saved==='dark'){
+    document.documentElement.setAttribute('data-theme','dark');
+    document.getElementById('themeToggle').textContent='☀️';
+  } else {
+    document.getElementById('themeToggle').textContent='🌙';
+  }
+})();
 
 loadData().then(()=>fetchHistoricalData());
 fetchPrices();
