@@ -154,6 +154,8 @@ canvas{display:block;width:100%;height:100%;}
 .statusbar{margin-top:36px;padding-top:14px;border-top:1px solid var(--border);display:flex;justify-content:space-between;font-size:11px;color:var(--muted);}
 .live-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);margin-right:5px;animation:blink 2s ease-in-out infinite;vertical-align:middle;}
 .empty{padding:20px;color:var(--muted);font-size:13px;text-align:center;}
+.proj-wrap{position:relative;height:110px;margin-top:10px;}
+.proj-wrap canvas{display:block;width:100%;height:100%;}
 
 @media(max-width:720px){
   .kpi-row{grid-template-columns:1fr 1fr;}
@@ -219,7 +221,7 @@ canvas{display:block;width:100%;height:100%;}
     <div class="chart-title">Évolution du portefeuille</div>
     <div class="chart-legend">
       <div class="leg-i"><svg width="20" height="2"><line x1="0" y1="1" x2="20" y2="1" stroke="#00d4a8" stroke-width="2"/></svg> Réel</div>
-      <div class="leg-i" style="color:var(--blue)"><svg width="20" height="2"><line x1="0" y1="1" x2="20" y2="1" stroke="#4f8ef7" stroke-width="1.5" stroke-dasharray="4 3"/></svg> Projection</div>
+
     </div>
   </div>
   <div class="chart-wrap"><canvas id="mainCanvas"></canvas></div>
@@ -245,6 +247,16 @@ canvas{display:block;width:100%;height:100%;}
         <circle cx="55" cy="55" r="42" fill="none" stroke="var(--border)" stroke-width="14"/>
       </svg>
       <div class="donut-legend" id="donutLegend"></div>
+    </div>
+    <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+      <div class="panel-header" style="margin-bottom:4px">
+        <div class="panel-title">Projection DCA</div>
+        <span id="projReturnLabel" class="neu" style="font-size:10px;font-family:'JetBrains Mono',monospace">7%/an</span>
+      </div>
+      <div class="proj-wrap"><canvas id="projCanvas"></canvas></div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:4px;font-family:'JetBrains Mono',monospace">
+        <span>Auj.</span><span id="projEndLabel">—</span>
+      </div>
     </div>
   </div>
 </div>
@@ -337,7 +349,7 @@ const ETFS=[
 const COLORS=['#00d4a8','#4f8ef7','#a78bfa','#f5a623'];
 
 let cfg={age:26,target_age:50,target:1000000,annual_return:7,prior_invested:0};
-let buys=[],prices={};
+let buys=[],prices={},historicalData={};
 
 const f=(n,d=2)=>n==null||isNaN(n)?'—':n.toLocaleString('fr-FR',{minimumFractionDigits:d,maximumFractionDigits:d});
 const eur=(n,d=0)=>f(n,d)+' €';
@@ -385,6 +397,28 @@ async function fetchPrices(){
   res.forEach((r,i)=>{if(r.status==='fulfilled'&&r.value){prices[ETFS[i].ticker]=r.value;ok++;}});
   ico.textContent='↻';
   document.getElementById('priceStatus').textContent=`${ok}/${ETFS.length} live`;
+  render();
+  // Also refresh historical data when prices refresh
+  fetchHistoricalData();
+}
+
+async function fetchHistoricalData(){
+  if(buys.length===0) return;
+  const firstDate = buys.reduce((min,b)=>b.date<min?b.date:min, buys[0].date);
+  // fetch 1 week before first buy to anchor chart
+  const from = new Date(firstDate);
+  from.setDate(from.getDate()-7);
+  const fromStr = from.toISOString().split('T')[0];
+  const results = await Promise.allSettled(
+    ETFS.map(e=>fetch(`/api/history?ticker=${encodeURIComponent(e.ticker)}&from=${fromStr}`)
+      .then(r=>r.ok?r.json():null)
+      .catch(()=>null))
+  );
+  results.forEach((r,i)=>{
+    if(r.status==='fulfilled'&&r.value?.points){
+      historicalData[ETFS[i].ticker]=r.value.points;
+    }
+  });
   render();
 }
 
@@ -444,6 +478,7 @@ function render(){
     :`Objectif ${eur(cfg.target)} à ${cfg.target_age} ans · hypothèse ${cfg.annual_return}%/an`;
 
   renderChart(total);
+  renderProjection(total);
   renderETFs();
   renderDonut();
   renderHistory();
@@ -455,102 +490,188 @@ function renderChart(currentTotal){
   const W=canvas.offsetWidth||700,H=canvas.offsetHeight||220;
   canvas.width=W*2;canvas.height=H*2;ctx.scale(2,2);
   ctx.clearRect(0,0,W,H);
-  const PAD={top:12,right:68,bottom:34,left:68};
+  const PAD={top:12,right:12,bottom:34,left:72};
   const cW=W-PAD.left-PAD.right,cH=H-PAD.top-PAD.bottom;
 
-  // Historical points
-  const histPts=buys.filter(b=>b.portfolioValueAtDate)
-    .map(b=>({date:new Date(b.date),value:b.portfolioValueAtDate}));
-  if(currentTotal>0) histPts.push({date:new Date(),value:currentTotal});
-
-  // Projection points
-  const projPts=[];
-  if(currentTotal>0){
-    const dca=recommendedDCA(currentTotal),r=cfg.annual_return/100/12;
-    const mLeft=(cfg.target_age-cfg.age)*12;
-    const today=new Date();
-    let v=currentTotal;
-    for(let m=0;m<=mLeft;m+=3){
-      if(m>0){for(let mm=0;mm<3;mm++) v=v*(1+r)+dca;}
-      projPts.push({date:new Date(today.getFullYear(),today.getMonth()+m,1),value:v});
-    }
-  }
-
-  const allPts=[...histPts,...projPts];
-  if(allPts.length===0){
-    ctx.fillStyle='rgba(74,100,120,.5)';ctx.font='12px Bricolage Grotesque';
-    ctx.textAlign='center';ctx.fillText('Les données apparaîtront après les premiers achats',W/2,H/2);
+  // Build weekly portfolio value from historical prices
+  // For each week date, compute sum(parts held at that date * close price that week)
+  const tickers=Object.keys(historicalData);
+  if(tickers.length===0||buys.length===0){
+    ctx.fillStyle='rgba(74,100,120,.5)';ctx.font='13px Bricolage Grotesque';
+    ctx.textAlign='center';
+    ctx.fillText(buys.length===0?'Aucun achat enregistré':'Chargement des cours historiques…',W/2,H/2);
     return;
   }
 
-  const allT=allPts.map(p=>p.date.getTime());
-  const allV=allPts.map(p=>p.value);
+  // Get all weekly dates from first ETF data
+  const refTicker=tickers[0];
+  const allDates=historicalData[refTicker].map(p=>p.date).sort();
+  if(allDates.length===0) return;
+
+  // Build sorted buys list for parts-at-date calculation
+  const sortedBuys=[...buys].sort((a,b)=>a.date.localeCompare(b.date));
+
+  const pts=[];
+  allDates.forEach(dateStr=>{
+    // Parts held on this date
+    const held=[0,0,0,0];
+    sortedBuys.forEach(b=>{ if(b.date<=dateStr) held[b.etfIdx]+=b.parts; });
+    if(held.every(h=>h===0)) return; // no position yet
+
+    // Portfolio value on this date
+    let val=0;
+    ETFS.forEach((e,i)=>{
+      const hist=historicalData[e.ticker];
+      if(!hist||held[i]===0) return;
+      // Find closest price on or before this date
+      const p=hist.find(p=>p.date===dateStr)||hist.filter(p=>p.date<=dateStr).pop();
+      if(p) val+=p.close*held[i];
+    });
+    if(val>0) pts.push({date:new Date(dateStr),value:val});
+  });
+
+  // Add today's value
+  if(currentTotal>0) pts.push({date:new Date(),value:currentTotal});
+
+  if(pts.length<2){
+    ctx.fillStyle='rgba(74,100,120,.5)';ctx.font='13px Bricolage Grotesque';
+    ctx.textAlign='center';ctx.fillText('Données insuffisantes pour tracer la courbe',W/2,H/2);
+    return;
+  }
+
+  const allT=pts.map(p=>p.date.getTime());
+  const allV=pts.map(p=>p.value);
   const minT=Math.min(...allT),maxT=Math.max(...allT);
-  const minV=Math.min(...allV)*0.92;
-  const maxV=Math.max(cfg.target*1.02,Math.max(...allV)*1.06);
+  const minV=Math.min(...allV)*0.94;
+  const maxV=Math.max(...allV)*1.06;
 
   const toX=d=>PAD.left+((d.getTime()-minT)/(maxT-minT))*cW;
   const toY=v=>PAD.top+(1-(v-minV)/(maxV-minV))*cH;
 
   // Y grid + labels
-  const ySteps=5;
-  ctx.font='9px JetBrains Mono';ctx.fillStyle='rgba(74,100,120,.8)';ctx.textAlign='right';
+  const ySteps=4;
+  ctx.font='9px JetBrains Mono';ctx.fillStyle='rgba(74,100,120,.85)';ctx.textAlign='right';
   for(let i=0;i<=ySteps;i++){
     const v=minV+(maxV-minV)*(i/ySteps),y=toY(v);
-    ctx.strokeStyle='rgba(25,35,48,.8)';ctx.lineWidth=.5;
+    ctx.strokeStyle='rgba(25,35,48,.9)';ctx.lineWidth=.5;
     ctx.beginPath();ctx.moveTo(PAD.left,y);ctx.lineTo(PAD.left+cW,y);ctx.stroke();
-    const label=v>=1000000?f(v/1000000,1)+'M€':v>=1000?f(v/1000,0)+'k€':f(v,0)+'€';
+    const label=v>=1000000?f(v/1000000,2)+'M€':v>=1000?f(v/1000,1)+'k€':f(v,0)+'€';
     ctx.fillText(label,PAD.left-6,y+3);
   }
 
-  // X labels
-  const startY=new Date(minT).getFullYear(),endY=new Date(maxT).getFullYear();
-  const step=Math.max(1,Math.floor((endY-startY)/7));
+  // X labels — show months if < 1 year, years if longer
+  const spanMs=maxT-minT;
+  const spanDays=spanMs/(1000*60*60*24);
   ctx.textAlign='center';ctx.fillStyle='rgba(74,100,120,.8)';
-  for(let y=startY;y<=endY;y+=step){
-    const d=new Date(y,0,1);
-    if(d.getTime()<minT||d.getTime()>maxT) continue;
-    const x=toX(d);
-    ctx.fillText(y,x,H-PAD.bottom+14);
-    ctx.strokeStyle='rgba(25,35,48,.5)';ctx.lineWidth=.5;ctx.setLineDash([2,4]);
-    ctx.beginPath();ctx.moveTo(x,PAD.top);ctx.lineTo(x,PAD.top+cH);ctx.stroke();
-    ctx.setLineDash([]);
+  if(spanDays<=400){
+    // Show months
+    const startD=new Date(minT),endD=new Date(maxT);
+    let d=new Date(startD.getFullYear(),startD.getMonth(),1);
+    while(d<=endD){
+      if(d.getTime()>=minT){
+        const x=toX(d);
+        const label=d.toLocaleDateString('fr-FR',{month:'short',year:'2-digit'});
+        ctx.fillText(label,x,H-PAD.bottom+14);
+        ctx.strokeStyle='rgba(25,35,48,.4)';ctx.lineWidth=.5;ctx.setLineDash([2,4]);
+        ctx.beginPath();ctx.moveTo(x,PAD.top);ctx.lineTo(x,PAD.top+cH);ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      d=new Date(d.getFullYear(),d.getMonth()+1,1);
+    }
+  } else {
+    const startY=new Date(minT).getFullYear(),endY=new Date(maxT).getFullYear();
+    const step=Math.max(1,Math.floor((endY-startY)/6));
+    for(let y=startY;y<=endY;y+=step){
+      const d=new Date(y,0,1);
+      if(d.getTime()<minT||d.getTime()>maxT) continue;
+      const x=toX(d);
+      ctx.fillText(y,x,H-PAD.bottom+14);
+      ctx.strokeStyle='rgba(25,35,48,.4)';ctx.lineWidth=.5;ctx.setLineDash([2,4]);
+      ctx.beginPath();ctx.moveTo(x,PAD.top);ctx.lineTo(x,PAD.top+cH);ctx.stroke();
+      ctx.setLineDash([]);
+    }
   }
+
+  // Area gradient + line
+  const grad=ctx.createLinearGradient(0,PAD.top,0,PAD.top+cH);
+  grad.addColorStop(0,'rgba(0,212,168,.22)');grad.addColorStop(1,'rgba(0,212,168,0)');
+  ctx.beginPath();ctx.moveTo(toX(pts[0].date),PAD.top+cH);
+  pts.forEach(p=>ctx.lineTo(toX(p.date),toY(p.value)));
+  ctx.lineTo(toX(pts[pts.length-1].date),PAD.top+cH);
+  ctx.closePath();ctx.fillStyle=grad;ctx.fill();
+
+  ctx.beginPath();pts.forEach((p,i)=>i===0?ctx.moveTo(toX(p.date),toY(p.value)):ctx.lineTo(toX(p.date),toY(p.value)));
+  ctx.strokeStyle='#00d4a8';ctx.lineWidth=2;ctx.stroke();
+
+  // Last value label on right
+  const lastPt=pts[pts.length-1];
+  const lastX=toX(lastPt.date),lastY=toY(lastPt.value);
+  ctx.beginPath();ctx.arc(lastX,lastY,4,0,Math.PI*2);ctx.fillStyle='#00d4a8';ctx.fill();
+}
+
+function renderProjection(currentTotal){
+  const canvas=document.getElementById('projCanvas');
+  if(!canvas) return;
+  const ctx=canvas.getContext('2d');
+  const W=canvas.offsetWidth||260,H=canvas.offsetHeight||110;
+  canvas.width=W*2;canvas.height=H*2;ctx.scale(2,2);
+  ctx.clearRect(0,0,W,H);
+  const PAD={top:8,right:8,bottom:28,left:52};
+  const cW=W-PAD.left-PAD.right,cH=H-PAD.top-PAD.bottom;
+
+  const dca=recommendedDCA(currentTotal||1000);
+  const r=cfg.annual_return/100/12;
+  const mLeft=(cfg.target_age-cfg.age)*12;
+  const today=new Date();
+  const pts=[];
+  let v=currentTotal||1000;
+  for(let m=0;m<=mLeft;m+=6){
+    if(m>0){for(let mm=0;mm<6;mm++) v=v*(1+r)+dca;}
+    pts.push({date:new Date(today.getFullYear(),today.getMonth()+m,1),value:v});
+  }
+
+  const allT=pts.map(p=>p.date.getTime());
+  const allV=pts.map(p=>p.value);
+  const minT=Math.min(...allT),maxT=Math.max(...allT);
+  const minV=0,maxV=Math.max(cfg.target*1.05,Math.max(...allV));
+
+  const toX=d=>PAD.left+((d.getTime()-minT)/(maxT-minT))*cW;
+  const toY=v=>PAD.top+(1-(v-minV)/(maxV-minV))*cH;
+
+  // Y grid
+  [0.25,0.5,0.75,1].forEach(frac=>{
+    const v2=minV+(maxV-minV)*frac,y=toY(v2);
+    ctx.strokeStyle='rgba(25,35,48,.9)';ctx.lineWidth=.5;
+    ctx.beginPath();ctx.moveTo(PAD.left,y);ctx.lineTo(PAD.left+cW,y);ctx.stroke();
+    ctx.fillStyle='rgba(74,100,120,.8)';ctx.font='8px JetBrains Mono';ctx.textAlign='right';
+    const label=v2>=1000000?f(v2/1000000,1)+'M':v2>=1000?f(v2/1000,0)+'k':'0';
+    ctx.fillText(label+'€',PAD.left-4,y+3);
+  });
 
   // Target line
-  if(cfg.target>=minV&&cfg.target<=maxV){
-    const ty=toY(cfg.target);
-    ctx.strokeStyle='rgba(240,80,110,.3)';ctx.lineWidth=1;ctx.setLineDash([4,5]);
-    ctx.beginPath();ctx.moveTo(PAD.left,ty);ctx.lineTo(PAD.left+cW,ty);ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle='rgba(240,80,110,.6)';ctx.textAlign='left';ctx.font='9px JetBrains Mono';
-    ctx.fillText('1 000 000 €',PAD.left+cW+4,ty+3);
-  }
+  const ty=toY(cfg.target);
+  ctx.strokeStyle='rgba(240,80,110,.35)';ctx.lineWidth=1;ctx.setLineDash([3,4]);
+  ctx.beginPath();ctx.moveTo(PAD.left,ty);ctx.lineTo(PAD.left+cW,ty);ctx.stroke();
+  ctx.setLineDash([]);
 
-  // Projection area + dashed line
-  if(projPts.length>1){
-    const g=ctx.createLinearGradient(0,PAD.top,0,PAD.top+cH);
-    g.addColorStop(0,'rgba(79,142,247,.12)');g.addColorStop(1,'rgba(79,142,247,0)');
-    ctx.beginPath();ctx.moveTo(toX(projPts[0].date),PAD.top+cH);
-    projPts.forEach(p=>ctx.lineTo(toX(p.date),toY(p.value)));
-    ctx.lineTo(toX(projPts[projPts.length-1].date),PAD.top+cH);
-    ctx.closePath();ctx.fillStyle=g;ctx.fill();
-    ctx.beginPath();projPts.forEach((p,i)=>i===0?ctx.moveTo(toX(p.date),toY(p.value)):ctx.lineTo(toX(p.date),toY(p.value)));
-    ctx.strokeStyle='rgba(79,142,247,.7)';ctx.lineWidth=1.5;ctx.setLineDash([5,5]);ctx.stroke();ctx.setLineDash([]);
-  }
+  // X labels (start + end year)
+  ctx.fillStyle='rgba(74,100,120,.8)';ctx.font='8px JetBrains Mono';ctx.textAlign='center';
+  ctx.fillText(today.getFullYear(),toX(pts[0].date),H-PAD.bottom+12);
+  ctx.fillText(new Date(maxT).getFullYear(),toX(pts[pts.length-1].date),H-PAD.bottom+12);
 
-  // Historical area + line
-  if(histPts.length>0){
-    const g=ctx.createLinearGradient(0,PAD.top,0,PAD.top+cH);
-    g.addColorStop(0,'rgba(0,212,168,.2)');g.addColorStop(1,'rgba(0,212,168,0)');
-    ctx.beginPath();ctx.moveTo(toX(histPts[0].date),PAD.top+cH);
-    histPts.forEach(p=>ctx.lineTo(toX(p.date),toY(p.value)));
-    ctx.lineTo(toX(histPts[histPts.length-1].date),PAD.top+cH);
-    ctx.closePath();ctx.fillStyle=g;ctx.fill();
-    ctx.beginPath();histPts.forEach((p,i)=>i===0?ctx.moveTo(toX(p.date),toY(p.value)):ctx.lineTo(toX(p.date),toY(p.value)));
-    ctx.strokeStyle='#00d4a8';ctx.lineWidth=2;ctx.stroke();
-    histPts.forEach(p=>{ctx.beginPath();ctx.arc(toX(p.date),toY(p.value),3,0,Math.PI*2);ctx.fillStyle='#00d4a8';ctx.fill();});
-  }
+  // Area + line
+  const g=ctx.createLinearGradient(0,PAD.top,0,PAD.top+cH);
+  g.addColorStop(0,'rgba(79,142,247,.2)');g.addColorStop(1,'rgba(79,142,247,0)');
+  ctx.beginPath();ctx.moveTo(toX(pts[0].date),PAD.top+cH);
+  pts.forEach(p=>ctx.lineTo(toX(p.date),toY(p.value)));
+  ctx.lineTo(toX(pts[pts.length-1].date),PAD.top+cH);
+  ctx.closePath();ctx.fillStyle=g;ctx.fill();
+  ctx.beginPath();pts.forEach((p,i)=>i===0?ctx.moveTo(toX(p.date),toY(p.value)):ctx.lineTo(toX(p.date),toY(p.value)));
+  ctx.strokeStyle='rgba(79,142,247,.8)';ctx.lineWidth=1.5;ctx.setLineDash([4,4]);ctx.stroke();ctx.setLineDash([]);
+
+  // Labels
+  document.getElementById('projEndLabel').textContent=`${cfg.target_age} ans (${today.getFullYear()+(cfg.target_age-cfg.age)})`;
+  document.getElementById('projReturnLabel').textContent=`${cfg.annual_return}%/an`;
 }
 
 function renderETFs(){
@@ -747,9 +868,10 @@ async function saveSettings(){
 // Il faut aussi ajouter la colonne portfolio_value_at_date dans Supabase
 // ALTER TABLE buys ADD COLUMN IF NOT EXISTS portfolio_value_at_date numeric;
 
-loadData();
+loadData().then(()=>fetchHistoricalData());
 fetchPrices();
 setInterval(fetchPrices,5*60*1000);
+setInterval(fetchHistoricalData,15*60*1000);
 </script>
 </body>
 </html>
