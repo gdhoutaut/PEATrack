@@ -1151,8 +1151,16 @@ function renderProjection(currentTotal){
 function renderETFs(){
   const held=partsHeld(),prus=pruByEtf(),totalVal=portfolioValue()||1;
   document.getElementById('etfTbody').innerHTML=ETFS.map((e,i)=>{
-    const p=prices[e.ticker],price=p?.price??0,prev=p?.prev??0;
-    const chg=prev>0?(price-prev)/prev*100:null;
+    const p=prices[e.ticker],price=p?.price??0;
+    // Var. jour depuis historique : dernière clôture avant aujourd'hui
+    const todayStr=new Date().toISOString().split('T')[0];
+    const hist1d=historicalData[e.ticker];
+    let prev=p?.prev??0;
+    if(hist1d&&hist1d.length>=1){
+      const daily=hist1d.filter(pt=>pt.date.slice(0,10)<todayStr);
+      if(daily.length>0) prev=parseFloat(daily[daily.length-1].close);
+    }
+    const chg=(prev>0&&price>0)?(price-prev)/prev*100:null;
     const val=price*held[i],pnl=(price-prus[i])*held[i];
     return `<tr onclick="toggleEtfDetail(${i})">
       <td><div class="etf-ticker" style="color:${COLORS[i]}">${e.label}</div>
