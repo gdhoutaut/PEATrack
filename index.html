@@ -353,7 +353,6 @@ canvas{display:block;width:100%;height:100%;}
     <div class="kpi-label">Performance</div>
     <div class="kpi-value" id="kpiPerf">—</div>
     <div class="kpi-sub neu" id="kpiPerfSub">depuis l'ouverture</div>
-    <div class="kpi-sub" id="kpiPerf1Y" style="margin-top:3px;font-size:11px">—</div>
   </div>
   <div class="kpi">
     <div class="kpi-accent amber"></div>
@@ -699,30 +698,8 @@ function render(){
   document.getElementById('kpiInvested').textContent=eur(invested);
   document.getElementById('kpiInvestedSub').textContent=`${buys.length} achat${buys.length>1?'s':''}${cfg.prior_invested>0?` · +${eur(cfg.prior_invested)} antérieurs`:''}`;
   document.getElementById('kpiPerf').innerHTML=`<span class="${perf>=0?'pos':'neg'}">${sgn(perf)}%</span>`;
-  // YTD performance — value of current holdings at Jan 1st prices vs now
-  const jan1=new Date(new Date().getFullYear(),0,1);
-  const held=partsHeld();
-  let ytdValJan=0,ytdValNow=0,hasYtd=false;
-  ETFS.forEach((e,i)=>{
-    if(held[i]===0) return;
-    const hist=historicalData[e.ticker];
-    if(!hist||hist.length===0) return;
-    // Find closest point on/after Jan 1
-    const jan1Str=jan1.toISOString().split('T')[0];
-    const afterJan=hist.filter(p=>p.date>=jan1Str);
-    const janPt=afterJan.length>0?afterJan[0]:hist[hist.length-1];
-    const nowPrice=prices[e.ticker]?.price;
-    if(!janPt||!nowPrice) return;
-    ytdValJan+=parseFloat(janPt.close)*held[i];
-    ytdValNow+=nowPrice*held[i];
-    hasYtd=true;
-  });
-  const ytd=hasYtd&&ytdValJan>0?(ytdValNow-ytdValJan)/ytdValJan*100:null;
   const perfLabels={'1J':"aujourd'hui",'1M':'sur 1 mois','6M':'sur 6 mois','YTD':`YTD ${new Date().getFullYear()}`,'MAX':"depuis l'ouverture"};
   document.getElementById('kpiPerfSub').textContent=perfLabels[chartFilter]||"depuis l'ouverture";
-  document.getElementById('kpiPerf1Y').innerHTML=ytd!=null
-    ?`<span class="${ytd>=0?'pos':'neg'}">${sgn(ytd,1)}% YTD ${new Date().getFullYear()}</span>`
-    :'<span class="neu">données YTD chargement…</span>';
   document.getElementById('kpiProgress').textContent=fmt(progress,2)+'%';
   document.getElementById('kpiProgressSub').textContent=`objectif ${cfg.target_age} ans · ${new Date().getFullYear()+(cfg.target_age-cfg.age)}`;
 
@@ -1175,8 +1152,7 @@ function renderETFs(){
   const held=partsHeld(),prus=pruByEtf(),totalVal=portfolioValue()||1;
   document.getElementById('etfTbody').innerHTML=ETFS.map((e,i)=>{
     const p=prices[e.ticker],price=p?.price??0,prev=p?.prev??0;
-    // If prev equals price exactly, it's likely stale data — show as null
-    const chg=(prev>0&&Math.abs(price-prev)>0.0001)?(price-prev)/prev*100:null;
+    const chg=prev>0?(price-prev)/prev*100:null;
     const val=price*held[i],pnl=(price-prus[i])*held[i];
     return `<tr onclick="toggleEtfDetail(${i})">
       <td><div class="etf-ticker" style="color:${COLORS[i]}">${e.label}</div>
