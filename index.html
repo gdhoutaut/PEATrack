@@ -718,7 +718,7 @@ function render(){
     hasYtd=true;
   });
   const ytd=hasYtd&&ytdValJan>0?(ytdValNow-ytdValJan)/ytdValJan*100:null;
-  const perfLabels={'1J':'aujourd'hui','1M':'sur 1 mois','6M':'sur 6 mois','YTD':`YTD ${new Date().getFullYear()}`,'MAX':"depuis l'ouverture"};
+  const perfLabels={'1J':"aujourd'hui",'1M':'sur 1 mois','6M':'sur 6 mois','YTD':`YTD ${new Date().getFullYear()}`,'MAX':"depuis l'ouverture"};
   document.getElementById('kpiPerfSub').textContent=perfLabels[chartFilter]||"depuis l'ouverture";
   document.getElementById('kpiPerf1Y').innerHTML=ytd!=null
     ?`<span class="${ytd>=0?'pos':'neg'}">${sgn(ytd,1)}% YTD ${new Date().getFullYear()}</span>`
