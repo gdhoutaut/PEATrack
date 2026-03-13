@@ -676,9 +676,10 @@ function render(){
   const total=portfolioValue(),invested=totalInvested(),pnl=total-invested;
   // Perf for active filter period
   let perf=invested>0?(pnl/invested)*100:0;
+  let perfEur=pnl;
   if(chartFilter!=='MAX'&&Object.keys(historicalData).length>0){
     const held=partsHeld();
-    let valStart=0,valNow=0,hasStart=false,perfEur=pnl;
+  let valStart=0,valNow=0,hasStart=false;
     const today2=new Date();
     let startDate;
     if(chartFilter==='1J') startDate=new Date(today2.toISOString().split('T')[0]);
