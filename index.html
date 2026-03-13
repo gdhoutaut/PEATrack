@@ -678,7 +678,7 @@ function render(){
   let perf=invested>0?(pnl/invested)*100:0;
   if(chartFilter!=='MAX'&&Object.keys(historicalData).length>0){
     const held=partsHeld();
-    let valStart=0,valNow=0,hasStart=false;
+    let valStart=0,valNow=0,hasStart=false,perfEur=pnl;
     const today2=new Date();
     let startDate;
     if(chartFilter==='1J') startDate=new Date(today2.toISOString().split('T')[0]);
@@ -699,7 +699,7 @@ function render(){
         valNow+=nowP*held[i];
         hasStart=true;
       });
-      if(hasStart&&valStart>0) perf=(valNow-valStart)/valStart*100;
+      if(hasStart&&valStart>0){perf=(valNow-valStart)/valStart*100;perfEur=valNow-valStart;}
     }
   }
   const progress=Math.min(100,(total/cfg.target)*100);
@@ -711,7 +711,7 @@ function render(){
     :'<span class="neu">Aucune position</span>';
   document.getElementById('kpiInvested').textContent=eur(invested);
   document.getElementById('kpiInvestedSub').textContent=`${buys.length} achat${buys.length>1?'s':''}${cfg.prior_invested>0?` · +${eur(cfg.prior_invested)} antérieurs`:''}`;
-  document.getElementById('kpiPerf').innerHTML=`<span class="${perf>=0?'pos':'neg'}">${sgn(perf)}%</span>`;
+  document.getElementById('kpiPerf').innerHTML=`<span class="${perf>=0?'pos':'neg'}">${sgn(perf)}%</span><span style="font-size:15px;font-weight:500;margin-left:8px;color:${perf>=0?'var(--accent)':'var(--red)'}">${perfEur>=0?'+':''}${eur(perfEur)}</span>`;
   const perfLabels={'1J':"aujourd'hui",'1M':'sur 1 mois','6M':'sur 6 mois','YTD':`YTD ${new Date().getFullYear()}`,'MAX':"depuis l'ouverture"};
   document.getElementById('kpiPerfSub').textContent=perfLabels[chartFilter]||"depuis l'ouverture";
   document.getElementById('kpiProgress').textContent=fmt(progress,2)+'%';
