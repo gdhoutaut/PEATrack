@@ -539,7 +539,7 @@ const COLORS_RGB=['0,184,150','59,126,246','139,92,246','232,147,10'];
 const MARKET_OPEN_H=8, MARKET_CLOSE_H=16, MARKET_CLOSE_M=30;
 
 let cfg={age:26,target_age:50,target:1000000,annual_return:7,prior_invested:0};
-let buys=[],prices={},historicalData={};
+let buys=[],prices={},historicalData={},dailyData={};
 let chartFilter='MAX';
 let historyCache={};
 // Store pts for tooltip
@@ -593,6 +593,20 @@ async function fetchPrices(){
   document.getElementById('priceStatus').textContent=`${ok}/${ETFS.length} live`;
   render();
   fetchHistoricalData();
+  fetchDailyData();
+}
+
+async function fetchDailyData(){
+  // Fetch 2 days of daily data per ETF to compute var. jour reliably
+  const results=await Promise.allSettled(
+    ETFS.map(e=>fetch(`/api/history?ticker=${encodeURIComponent(e.ticker)}&from=${
+      (()=>{const d=new Date();d.setDate(d.getDate()-5);return d.toISOString().split('T')[0];})()
+    }&interval=1d`).then(r=>r.ok?r.json():null).catch(()=>null))
+  );
+  results.forEach((r,i)=>{
+    if(r.status==='fulfilled'&&r.value?.points) dailyData[ETFS[i].ticker]=r.value.points;
+  });
+  renderETFs();
 }
 
 async function fetchHistoricalData(filter){
@@ -820,7 +834,7 @@ function renderChart(currentTotal){
       const p=hist.find(p=>p.date===dateStr)||hist.filter(p=>p.date<=dateStr).pop();
       if(p) val+=p.close*held[i];
     });
-    if(val>0) pts.push({date:new Date(dateStr),value:val});
+    if(val>0&&held.some(h=>h>0)) pts.push({date:new Date(dateStr),value:val});
   });
 
   if(currentTotal>0&&!isIntraday) pts.push({date:new Date(),value:currentTotal});
@@ -1152,13 +1166,13 @@ function renderETFs(){
   const held=partsHeld(),prus=pruByEtf(),totalVal=portfolioValue()||1;
   document.getElementById('etfTbody').innerHTML=ETFS.map((e,i)=>{
     const p=prices[e.ticker],price=p?.price??0;
-    // Var. jour depuis historique : dernière clôture avant aujourd'hui
+    // Var. jour depuis dailyData dédié (2d interval=1d)
     const todayStr=new Date().toISOString().split('T')[0];
-    const hist1d=historicalData[e.ticker];
-    let prev=p?.prev??0;
-    if(hist1d&&hist1d.length>=1){
-      const daily=hist1d.filter(pt=>pt.date.slice(0,10)<todayStr);
-      if(daily.length>0) prev=parseFloat(daily[daily.length-1].close);
+    const ddata=dailyData[e.ticker];
+    let prev=0;
+    if(ddata&&ddata.length>=1){
+      const past=ddata.filter(pt=>pt.date.slice(0,10)<todayStr);
+      if(past.length>0) prev=parseFloat(past[past.length-1].close);
     }
     const chg=(prev>0&&price>0)?(price-prev)/prev*100:null;
     const val=price*held[i],pnl=(price-prus[i])*held[i];
