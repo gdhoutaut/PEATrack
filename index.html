@@ -374,6 +374,7 @@ canvas{display:block;width:100%;height:100%;}
       <button class="cf-btn" onclick="setChartFilter('1J')">1J</button>
       <button class="cf-btn" onclick="setChartFilter('1M')">1M</button>
       <button class="cf-btn" onclick="setChartFilter('6M')">6M</button>
+      <button class="cf-btn" onclick="setChartFilter('YTD')">YTD</button>
       <button class="cf-btn active" onclick="setChartFilter('MAX')">MAX</button>
     </div>
   </div>
@@ -613,6 +614,9 @@ async function fetchHistoricalData(filter){
     interval='1wk';
     const d=new Date(today);d.setMonth(d.getMonth()-6);
     fromStr=d.toISOString().split('T')[0];
+  } else if(f==='YTD'){
+    interval='1wk';
+    fromStr=`${today.getFullYear()}-01-01`;
   } else {
     interval='1wk';
     const firstDate=buys.reduce((min,b)=>b.date<min?b.date:min,buys[0].date);
@@ -626,7 +630,7 @@ async function fetchHistoricalData(filter){
   const newData={};
   results.forEach((r,i)=>{if(r.status==='fulfilled'&&r.value?.points) newData[ETFS[i].ticker]=r.value.points;});
   historicalData=newData;
-  if(f!=='1J') historyCache[f]=newData;
+  if(f!=='1J'&&f!=='YTD') historyCache[f]=newData;
   render();
 }
 
@@ -657,7 +661,34 @@ function lastMonthDeposit(){
 // ── RENDER ────────────────────────────────────────────────────────────────────
 function render(){
   const total=portfolioValue(),invested=totalInvested(),pnl=total-invested;
-  const perf=invested>0?(pnl/invested)*100:0;
+  // Perf for active filter period
+  let perf=invested>0?(pnl/invested)*100:0;
+  if(chartFilter!=='MAX'&&Object.keys(historicalData).length>0){
+    const held=partsHeld();
+    let valStart=0,valNow=0,hasStart=false;
+    const today2=new Date();
+    let startDate;
+    if(chartFilter==='1J') startDate=new Date(today2.toISOString().split('T')[0]);
+    else if(chartFilter==='1M'){startDate=new Date(today2);startDate.setMonth(startDate.getMonth()-1);}
+    else if(chartFilter==='6M'){startDate=new Date(today2);startDate.setMonth(startDate.getMonth()-6);}
+    else if(chartFilter==='YTD') startDate=new Date(today2.getFullYear(),0,1);
+    if(startDate){
+      const startStr=startDate.toISOString().split('T')[0];
+      ETFS.forEach((e,i)=>{
+        if(held[i]===0) return;
+        const hist=historicalData[e.ticker];
+        if(!hist||hist.length===0) return;
+        const after=hist.filter(p=>p.date>=startStr);
+        const pt=after.length>0?after[0]:hist[hist.length-1];
+        const nowP=prices[e.ticker]?.price;
+        if(!pt||!nowP) return;
+        valStart+=parseFloat(pt.close)*held[i];
+        valNow+=nowP*held[i];
+        hasStart=true;
+      });
+      if(hasStart&&valStart>0) perf=(valNow-valStart)/valStart*100;
+    }
+  }
   const progress=Math.min(100,(total/cfg.target)*100);
   const dca=recommendedDCA(total),lastDep=lastMonthDeposit();
 
@@ -687,7 +718,8 @@ function render(){
     hasYtd=true;
   });
   const ytd=hasYtd&&ytdValJan>0?(ytdValNow-ytdValJan)/ytdValJan*100:null;
-  document.getElementById('kpiPerfSub').textContent="depuis l'ouverture";
+  const perfLabels={'1J':'aujourd'hui','1M':'sur 1 mois','6M':'sur 6 mois','YTD':`YTD ${new Date().getFullYear()}`,'MAX':"depuis l'ouverture"};
+  document.getElementById('kpiPerfSub').textContent=perfLabels[chartFilter]||"depuis l'ouverture";
   document.getElementById('kpiPerf1Y').innerHTML=ytd!=null
     ?`<span class="${ytd>=0?'pos':'neg'}">${sgn(ytd,1)}% YTD ${new Date().getFullYear()}</span>`
     :'<span class="neu">données YTD chargement…</span>';
@@ -759,6 +791,7 @@ function setChartFilter(f){
   chartFilter=f;
   document.querySelectorAll('.cf-btn').forEach(btn=>btn.classList.toggle('active',btn.textContent===f));
   fetchHistoricalData(f);
+  render(); // update perf label immediately
 }
 
 function renderChart(currentTotal){
@@ -1141,8 +1174,9 @@ function renderProjection(currentTotal){
 function renderETFs(){
   const held=partsHeld(),prus=pruByEtf(),totalVal=portfolioValue()||1;
   document.getElementById('etfTbody').innerHTML=ETFS.map((e,i)=>{
-    const p=prices[e.ticker],price=p?.price??0,prev=p?.prev??price;
-    const chg=prev>0?(price-prev)/prev*100:null;
+    const p=prices[e.ticker],price=p?.price??0,prev=p?.prev??0;
+    // If prev equals price exactly, it's likely stale data — show as null
+    const chg=(prev>0&&Math.abs(price-prev)>0.0001)?(price-prev)/prev*100:null;
     const val=price*held[i],pnl=(price-prus[i])*held[i];
     return `<tr onclick="toggleEtfDetail(${i})">
       <td><div class="etf-ticker" style="color:${COLORS[i]}">${e.label}</div>
