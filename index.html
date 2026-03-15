@@ -224,6 +224,23 @@ canvas{display:block;width:100%;height:100%;}
 .spinner{width:11px;height:11px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;display:inline-block;}
 @keyframes spin{to{transform:rotate(360deg)}}
 .statusbar{margin-top:32px;padding-top:12px;border-top:1px solid var(--border);display:flex;justify-content:space-between;font-size:11px;color:var(--muted);}
+
+/* NEWS */
+.news-panel{background:var(--white);border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:var(--shadow);margin-bottom:12px;}
+.news-panel-header{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;}
+.news-group{border-top:1px solid var(--border);}
+.news-group-header{display:flex;align-items:center;gap:8px;padding:12px 20px 8px;}
+.news-group-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;}
+.news-group-etf{font-size:10px;font-family:'JetBrains Mono',monospace;color:var(--muted);background:var(--s2);padding:2px 6px;border-radius:4px;}
+.news-item{display:flex;flex-direction:column;gap:3px;padding:8px 20px;border-top:1px solid var(--border);text-decoration:none;transition:background .12s;}
+.news-item:hover{background:var(--s2);}
+.news-item-title{font-size:13px;color:var(--dark);line-height:1.4;font-weight:500;}
+.news-item-meta{font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;}
+.news-empty{padding:16px 20px;font-size:12px;color:var(--muted);font-style:italic;}
+[data-theme="dark"] .news-panel{background:var(--s1);border-color:var(--border);}
+[data-theme="dark"] .news-item:hover{background:var(--s2);}
+[data-theme="dark"] .news-item-title{color:var(--dark);}
+[data-theme="dark"] .news-group-etf{background:var(--s3);}
 .live-dot{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--accent);margin-right:5px;animation:blink 2s ease-in-out infinite;vertical-align:middle;}
 .empty{padding:20px;color:var(--muted);font-size:13px;text-align:center;}
 
@@ -435,6 +452,15 @@ canvas{display:block;width:100%;height:100%;}
     </div>
   </div>
   <div class="dca-amount on-track" id="dcaAmount">—</div>
+</div>
+
+<!-- NEWS -->
+<div class="news-panel mobile-section" style="margin-bottom:12px">
+  <div class="news-panel-header">
+    <div class="panel-title">Actualités des indices</div>
+    <button class="btn" id="newsRefreshBtn" onclick="fetchNews()" style="font-size:11px;padding:4px 10px">↻ Actualiser</button>
+  </div>
+  <div id="newsGroups"><div class="news-empty">Chargement des actualités…</div></div>
 </div>
 
 <!-- HISTORY -->
@@ -1431,10 +1457,50 @@ window.addEventListener('load',()=>{
   initMainCursor();
   setupProjTooltip();
   updateMarketStatus();
-  setInterval(updateMarketStatus,60000); // update every minute
-  // Live pulse: redraw chart every second for the blinking dot
+  setInterval(updateMarketStatus,60000);
   setInterval(()=>{if(mainPts&&mainPts.length>0) renderChart(portfolioValue());},1000);
+  fetchNews();
 });
+
+// ── NEWS ─────────────────────────────────────────────────────────────────────
+const ETF_COLORS_MAP={'ESEE':'#00b896','AE57':'#3b7ef6','ETSZ':'#8b5cf6','18MH':'#e8930a'};
+
+async function fetchNews(){
+  const btn=document.getElementById('newsRefreshBtn');
+  const container=document.getElementById('newsGroups');
+  if(btn) btn.textContent='…';
+  try{
+    const r=await fetch('/api/news');
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const {news}=await r.json();
+    if(!news||news.length===0){
+      container.innerHTML='<div class="news-empty">Aucune actualité disponible.</div>';
+      return;
+    }
+    container.innerHTML=news.map(group=>{
+      if(!group.items||group.items.length===0) return '';
+      const color=ETF_COLORS_MAP[group.etf]||'var(--accent)';
+      const items=group.items.map(item=>{
+        const date=item.pubDate?new Date(item.pubDate).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):'';
+        return `<a class="news-item" href="${item.link}" target="_blank" rel="noopener">
+          <div class="news-item-title">${item.title}</div>
+          <div class="news-item-meta">${item.source?item.source+' · ':''}${date}</div>
+        </a>`;
+      }).join('');
+      return `<div class="news-group">
+        <div class="news-group-header">
+          <span class="news-group-label" style="color:${color}">${group.label}</span>
+          <span class="news-group-etf">${group.etf}</span>
+        </div>
+        ${items}
+      </div>`;
+    }).join('');
+  }catch(e){
+    container.innerHTML=`<div class="news-empty">Erreur de chargement : ${e.message}</div>`;
+  }finally{
+    if(btn) btn.textContent='↻ Actualiser';
+  }
+}
 
 // ── THEME ─────────────────────────────────────────────────────────────────────
 function toggleTheme(){
