@@ -386,13 +386,121 @@ box-shadow:0 4px 20px rgba(10,10,10,.2);transition:transform .12s;
 @media(min-width:641px){
 .mobile-nav,.mobile-fab{display:none;}
 }
+
+/* ── LAYOUT 3 COLONNES ≥1280px ─────────────────────────────────────────────── */
+@media(min-width:1280px){
+/* Le layout vertical est masqué */
+.vert-layout{display:none;}
+
+body{overflow:hidden;height:100vh;}
+.wrap{
+max-width:none;width:100%;height:100vh;
+display:flex;flex-direction:column;
+padding:0;overflow:hidden;
+}
+
+/* Header fixe en haut */
+.header{
+flex-shrink:0;
+padding:0 28px;height:52px;
+margin-bottom:0;
+border-bottom:1px solid var(–border);
+background:var(–bg);
+position:static;
+}
+
+/* Conteneur 3 colonnes prend le reste de la hauteur */
+.desk-layout{
+display:grid;
+grid-template-columns:280px 1fr 300px;
+flex:1;overflow:hidden;
+gap:0;
+}
+.vert-layout{display:none;}
+
+/* Colonne générique */
+.desk-col{
+overflow-y:auto;overflow-x:hidden;
+padding:20px 16px;
+border-right:1px solid var(–border);
+scrollbar-width:thin;
+scrollbar-color:var(–border) transparent;
+}
+.desk-col:last-child{border-right:none;}
+
+/* ── COL GAUCHE ── */
+.desk-col-left{padding:20px 18px;display:flex;flex-direction:column;gap:14px;}
+
+/* KPI vertical stack */
+.kpi-col{
+background:var(–s1);border:1px solid var(–border);
+border-radius:var(–r);overflow:hidden;
+box-shadow:var(–shadow);flex-shrink:0;
+}
+.kpi-col-item{padding:16px 18px;}
+.kpi-col-item .kpi-label{font-family:‘DM Mono’,monospace;font-size:9px;text-transform:uppercase;letter-spacing:.12em;color:var(–muted);margin-bottom:8px;display:block;}
+.kpi-col-item .kpi-value{font-family:‘Instrument Serif’,serif;font-style:italic;font-size:28px;color:var(–ink);line-height:1;margin-bottom:4px;letter-spacing:-.3px;}
+.kpi-col-item .kpi-sub{font-family:‘DM Mono’,monospace;font-size:10px;color:var(–muted2);}
+.kpi-col-divider{height:1px;background:var(–border);margin:0;}
+.serif-italic{font-family:‘Instrument Serif’,serif;font-style:italic;}
+
+/* DCA compact */
+.desk-dca{margin-bottom:0;padding:14px 16px;}
+.desk-dca .dca-amount{font-size:24px;}
+.desk-dca .dca-title{font-size:12px;}
+
+/* Allocation panel */
+.desk-alloc-panel{flex:1;min-height:0;overflow-y:auto;}
+
+/* ── COL CENTRE ── */
+.desk-col-center{
+padding:20px 20px;display:flex;flex-direction:column;gap:14px;
+border-right:1px solid var(–border);overflow:hidden;
+}
+/* Courbe prend max de hauteur disponible */
+.desk-col-center .chart-panel{
+flex:1;min-height:0;display:flex;flex-direction:column;margin-bottom:0;
+}
+.desk-col-center .chart-wrap{flex:1;min-height:0;height:auto!important;}
+.desk-col-center .chart-panel canvas{height:100%!important;}
+
+/* Positions panel */
+.desk-positions-panel{flex-shrink:0;}
+
+/* ── COL DROITE ── */
+.desk-col-right{
+padding:0;display:flex;flex-direction:column;gap:0;overflow:hidden;
+}
+.desk-news-panel{
+flex-shrink:0;border-radius:0;border:none;
+border-bottom:1px solid var(–border);
+box-shadow:none;margin-bottom:0;
+max-height:45%;overflow-y:auto;
+}
+.desk-history-panel{
+flex:1;overflow-y:auto;border-radius:0;border:none;box-shadow:none;
+}
+
+/* Masquer les .mobile-section wrappers qui n’ont plus de sens */
+.desk-col .mobile-section{display:block!important;}
+
+/* Ajuste two-col — pas nécessaire en layout 3col */
+.desk-col .two-col{display:block;grid-template-columns:1fr;}
+}
+
+/* ── LAYOUT VERTICAL 641px–1279px ──────────────────────────────────────────── */
+@media(min-width:641px) and (max-width:1279px){
+.desk-layout{display:none;}
+.vert-layout{display:block;}
+.wrap{max-width:1080px;margin:0 auto;padding:40px 28px 80px;}
+}
 </style>
 
 </head>
 <body>
 <div class="wrap">
 
-<!-- HEADER -->
+<!-- HEADER — commun à tous les layouts -->
 
 <div class="header">
   <div class="brand"><span class="brand-name">PEA</span><span class="brand-dot">·</span><span class="brand-name">track</span><span class="brand-sub">Trade Republic</span></div>
@@ -405,137 +513,249 @@ box-shadow:0 4px 20px rgba(10,10,10,.2);transition:transform .12s;
   </div>
 </div>
 
-<!-- KPIs -->
+<!-- LAYOUT 3 COLONNES (≥1280px) + fallback vertical (<1280px) -->
 
-<div class="kpi-row" id="kpiRow">
-  <div class="kpi">
-    <div class="kpi-accent"></div>
-    <div class="kpi-label">Valeur portefeuille</div>
-    <div class="kpi-value" id="kpiTotal">—</div>
-    <div class="kpi-sub" id="kpiPnl">—</div>
-  </div>
-  <div class="kpi">
-    <div class="kpi-accent blue"></div>
-    <div class="kpi-label">Total versé</div>
-    <div class="kpi-value" id="kpiInvested">—</div>
-    <div class="kpi-sub neu" id="kpiInvestedSub">—</div>
-  </div>
-  <div class="kpi">
-    <div class="kpi-accent"></div>
-    <div class="kpi-label">Performance</div>
-    <div class="kpi-value" id="kpiPerf">—</div>
-    <div class="kpi-sub neu" id="kpiPerfSub">depuis l'ouverture</div>
-  </div>
-  <div class="kpi">
-    <div class="kpi-accent amber"></div>
-    <div class="kpi-label">Progression 1M€</div>
-    <div class="kpi-value" id="kpiProgress">—</div>
-    <div class="kpi-sub neu" id="kpiProgressSub">—</div>
-  </div>
-</div>
+<div class="desk-layout">
 
-<!-- MAIN CHART -->
+  <!-- COL GAUCHE : KPIs + DCA + Allocation + Projection -->
 
-<div class="chart-panel mobile-section" id="sectionChart">
-  <div class="chart-header">
-    <div style="display:flex;align-items:center;gap:12px">
-      <div class="chart-title">Évolution du portefeuille</div>
-      <div id="marketStatus" style="display:flex;align-items:center;gap:5px;font-size:11px;font-family:'DM Mono',monospace;"></div>
-    </div>
-    <div class="chart-filters">
-      <button class="cf-btn" onclick="setChartFilter('1J')">1J</button>
-      <button class="cf-btn" onclick="setChartFilter('1M')">1M</button>
-      <button class="cf-btn" onclick="setChartFilter('6M')">6M</button>
-      <button class="cf-btn" onclick="setChartFilter('YTD')">YTD</button>
-      <button class="cf-btn active" onclick="setChartFilter('MAX')">MAX</button>
-    </div>
-  </div>
-  <div class="chart-wrap" style="position:relative">
-    <canvas id="mainCanvas"></canvas>
-
-  </div>
-</div>
-
-<!-- POSITIONS + DONUT -->
-
-<div class="two-col mobile-section" id="sectionPositions">
-  <div class="panel">
-    <div class="panel-header">
-      <div class="panel-title">Positions</div>
-      <span id="priceStatus" class="neu" style="font-size:11px;font-family:'DM Mono',monospace">—</span>
-    </div>
-    <table class="etf-table">
-      <thead><tr>
-        <th>ETF</th><th>Cours</th><th>Var. jour</th><th>Valeur</th><th>P&L</th>
-      </tr></thead>
-      <tbody id="etfTbody"></tbody>
-    </table>
-  </div>
-  <div class="panel">
-    <div class="panel-header"><div class="panel-title">Allocation</div></div>
-    <div class="donut-wrap">
-      <svg id="donutSvg" width="100" height="100" viewBox="0 0 110 110" style="flex-shrink:0">
-        <circle cx="55" cy="55" r="42" fill="none" stroke="var(--border)" stroke-width="14"/>
-      </svg>
-      <div class="donut-legend" id="donutLegend"></div>
-    </div>
-    <div class="proj-section" style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
-      <div class="panel-header" style="margin-bottom:4px">
-        <div class="panel-title">Projection 2050</div>
-        <span id="projReturnLabel" class="neu" style="font-size:10px;font-family:'DM Mono',monospace">7%/an · sans apport</span>
+  <div class="desk-col desk-col-left">
+    <div class="kpi-col">
+      <div class="kpi-col-item">
+        <div class="kpi-label">Valeur portefeuille</div>
+        <div class="kpi-value serif-italic" id="kpiTotal">—</div>
+        <div class="kpi-sub" id="kpiPnl">—</div>
       </div>
-      <div class="proj-wrap" style="position:relative">
-        <canvas id="projCanvas"></canvas>
-        <div class="chart-tooltip" id="projTooltip" style="font-size:11px">
-          <div class="chart-tooltip-val" id="projTtVal" style="font-size:12px">—</div>
-          <div class="chart-tooltip-date" id="projTtDate">—</div>
-        </div>
+      <div class="kpi-col-divider"></div>
+      <div class="kpi-col-item">
+        <div class="kpi-label">Total versé</div>
+        <div class="kpi-value serif-italic" id="kpiInvested">—</div>
+        <div class="kpi-sub neu" id="kpiInvestedSub">—</div>
       </div>
-      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:4px;font-family:'DM Mono',monospace">
-        <span id="projStartLabel">Auj.</span><span>2050</span>
+      <div class="kpi-col-divider"></div>
+      <div class="kpi-col-item">
+        <div class="kpi-label">Performance</div>
+        <div class="kpi-value serif-italic" id="kpiPerf">—</div>
+        <div class="kpi-sub neu" id="kpiPerfSub">depuis l'ouverture</div>
       </div>
-      <div id="projEndValue" style="font-size:11px;color:var(--blue);font-family:'DM Mono',monospace;text-align:right;margin-top:2px">—</div>
+      <div class="kpi-col-divider"></div>
+      <div class="kpi-col-item">
+        <div class="kpi-label">Progression 1M€</div>
+        <div class="kpi-value serif-italic" id="kpiProgress">—</div>
+        <div class="kpi-sub neu" id="kpiProgressSub">—</div>
+      </div>
     </div>
-  </div>
-</div>
 
-<!-- DCA BANNER -->
-
-<div class="dca-banner on-track" id="dcaBanner" style="margin-bottom:12px">
+```
+<div class="dca-banner on-track desk-dca" id="dcaBanner">
   <div class="dca-left">
     <div class="dca-emoji" id="dcaEmoji">📈</div>
     <div>
-      <div class="dca-title" id="dcaTitle">DCA recommandé ce mois</div>
+      <div class="dca-title" id="dcaTitle">DCA recommandé</div>
       <div class="dca-desc" id="dcaDesc">—</div>
     </div>
   </div>
   <div class="dca-amount on-track" id="dcaAmount">—</div>
 </div>
 
-<!-- NEWS -->
-
-<div class="news-panel mobile-section" style="margin-bottom:12px">
-  <div class="news-panel-header">
-    <div class="panel-title">Actualités des indices</div>
-    <button class="btn" id="newsRefreshBtn" onclick="fetchNews()" style="font-size:11px;padding:4px 10px">↻ Actualiser</button>
+<div class="panel desk-alloc-panel">
+  <div class="panel-header"><div class="panel-title">Allocation</div></div>
+  <div class="donut-wrap">
+    <svg id="donutSvg" width="90" height="90" viewBox="0 0 110 110" style="flex-shrink:0">
+      <circle cx="55" cy="55" r="42" fill="none" stroke="var(--border)" stroke-width="14"/>
+    </svg>
+    <div class="donut-legend" id="donutLegend"></div>
   </div>
-  <div id="newsGroups"><div class="news-empty">Chargement des actualités…</div></div>
+  <div class="proj-section" style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
+    <div class="panel-header" style="margin-bottom:4px">
+      <div class="panel-title">Projection 2050</div>
+      <span id="projReturnLabel" class="neu" style="font-size:10px;font-family:'DM Mono',monospace">7%/an · sans apport</span>
+    </div>
+    <div class="proj-wrap" style="position:relative">
+      <canvas id="projCanvas"></canvas>
+      <div class="chart-tooltip" id="projTooltip" style="font-size:11px">
+        <div class="chart-tooltip-val" id="projTtVal" style="font-size:12px">—</div>
+        <div class="chart-tooltip-date" id="projTtDate">—</div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:4px;font-family:'DM Mono',monospace">
+      <span id="projStartLabel">Auj.</span><span>2050</span>
+    </div>
+    <div id="projEndValue" style="font-size:11px;color:var(--blue);font-family:'DM Mono',monospace;text-align:right;margin-top:2px">—</div>
+  </div>
 </div>
+```
 
-<!-- HISTORY -->
+  </div>
 
-<div class="history-panel mobile-section" id="sectionHistory">
+  <!-- COL CENTRALE : Courbe + Positions -->
+
+  <div class="desk-col desk-col-center">
+    <div class="chart-panel" id="sectionChart">
+      <div class="chart-header">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div class="chart-title">Évolution</div>
+          <div id="marketStatus" style="display:flex;align-items:center;gap:5px;font-size:11px;font-family:'DM Mono',monospace;"></div>
+        </div>
+        <div class="chart-filters">
+          <button class="cf-btn" onclick="setChartFilter('1J')">1J</button>
+          <button class="cf-btn" onclick="setChartFilter('1M')">1M</button>
+          <button class="cf-btn" onclick="setChartFilter('6M')">6M</button>
+          <button class="cf-btn" onclick="setChartFilter('YTD')">YTD</button>
+          <button class="cf-btn active" onclick="setChartFilter('MAX')">MAX</button>
+        </div>
+      </div>
+      <div class="chart-wrap" style="position:relative">
+        <canvas id="mainCanvas"></canvas>
+      </div>
+    </div>
+
+```
+<div class="panel desk-positions-panel">
+  <div class="panel-header">
+    <div class="panel-title">Positions</div>
+    <span id="priceStatus" class="neu" style="font-size:11px;font-family:'DM Mono',monospace">—</span>
+  </div>
+  <table class="etf-table">
+    <thead><tr>
+      <th>ETF</th><th>Cours</th><th>Var. jour</th><th>Valeur</th><th>P&L</th>
+    </tr></thead>
+    <tbody id="etfTbody"></tbody>
+  </table>
+</div>
+```
+
+  </div>
+
+  <!-- COL DROITE : News + Historique (scroll interne) -->
+
+  <div class="desk-col desk-col-right">
+    <div class="news-panel desk-news-panel">
+      <div class="news-panel-header">
+        <div class="panel-title">Actualités</div>
+        <button class="btn" id="newsRefreshBtn" onclick="fetchNews()" style="font-size:10px;padding:3px 8px">↻</button>
+      </div>
+      <div id="newsGroups"><div class="news-empty">Chargement…</div></div>
+    </div>
+
+```
+<div class="history-panel desk-history-panel" id="sectionHistory">
   <div class="history-panel-header">
-    <div class="panel-title">Historique des achats</div>
+    <div class="panel-title">Historique</div>
     <span id="histCount" class="neu" style="font-size:11px;font-family:'DM Mono',monospace">—</span>
   </div>
   <div id="histGroups"><div class="empty">Chargement…</div></div>
 </div>
+```
 
-<div class="statusbar">
-  <span><span class="live-dot"></span>Cours différés ~15min · Yahoo Finance</span>
-  <span>PEA · Trade Republic · Paris</span>
-</div>
+  </div>
+
+</div><!-- /desk-layout -->
+
+<!-- FALLBACK VERTICAL (<1280px) — sections dupliquées avec IDs différents -->
+
+<div class="vert-layout">
+  <div class="kpi-row" id="kpiRow">
+    <div class="kpi"><div class="kpi-accent"></div>
+      <div class="kpi-label">Valeur portefeuille</div>
+      <div class="kpi-value" id="kpiTotalV">—</div>
+      <div class="kpi-sub" id="kpiPnlV">—</div>
+    </div>
+    <div class="kpi"><div class="kpi-accent blue"></div>
+      <div class="kpi-label">Total versé</div>
+      <div class="kpi-value" id="kpiInvestedV">—</div>
+      <div class="kpi-sub neu" id="kpiInvestedSubV">—</div>
+    </div>
+    <div class="kpi"><div class="kpi-accent"></div>
+      <div class="kpi-label">Performance</div>
+      <div class="kpi-value" id="kpiPerfV">—</div>
+      <div class="kpi-sub neu" id="kpiPerfSubV">depuis l'ouverture</div>
+    </div>
+    <div class="kpi"><div class="kpi-accent amber"></div>
+      <div class="kpi-label">Progression 1M€</div>
+      <div class="kpi-value" id="kpiProgressV">—</div>
+      <div class="kpi-sub neu" id="kpiProgressSubV">—</div>
+    </div>
+  </div>
+  <div class="chart-panel mobile-section" id="sectionChartV">
+    <div class="chart-header">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="chart-title">Évolution du portefeuille</div>
+        <div id="marketStatusV" style="display:flex;align-items:center;gap:5px;font-size:11px;font-family:'DM Mono',monospace;"></div>
+      </div>
+      <div class="chart-filters">
+        <button class="cf-btn" onclick="setChartFilter('1J')">1J</button>
+        <button class="cf-btn" onclick="setChartFilter('1M')">1M</button>
+        <button class="cf-btn" onclick="setChartFilter('6M')">6M</button>
+        <button class="cf-btn" onclick="setChartFilter('YTD')">YTD</button>
+        <button class="cf-btn-v active" onclick="setChartFilter('MAX')">MAX</button>
+      </div>
+    </div>
+    <div class="chart-wrap" style="position:relative">
+      <canvas id="mainCanvasV"></canvas>
+    </div>
+  </div>
+  <div class="two-col mobile-section" id="sectionPositionsV">
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">Positions</div>
+        <span id="priceStatusV" class="neu" style="font-size:11px;font-family:'DM Mono',monospace">—</span>
+      </div>
+      <table class="etf-table"><thead><tr>
+        <th>ETF</th><th>Cours</th><th>Var. jour</th><th>Valeur</th><th>P&L</th>
+      </tr></thead><tbody id="etfTbodyV"></tbody></table>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><div class="panel-title">Allocation</div></div>
+      <div class="donut-wrap">
+        <svg id="donutSvgV" width="100" height="100" viewBox="0 0 110 110" style="flex-shrink:0">
+          <circle cx="55" cy="55" r="42" fill="none" stroke="var(--border)" stroke-width="14"/>
+        </svg>
+        <div class="donut-legend" id="donutLegendV"></div>
+      </div>
+      <div class="proj-section" style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+        <div class="panel-header" style="margin-bottom:4px">
+          <div class="panel-title">Projection 2050</div>
+          <span class="neu" style="font-size:10px;font-family:'DM Mono',monospace">7%/an · sans apport</span>
+        </div>
+        <div class="proj-wrap" style="position:relative"><canvas id="projCanvasV"></canvas></div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:4px;font-family:'DM Mono',monospace">
+          <span>Auj.</span><span>2050</span>
+        </div>
+        <div id="projEndValueV" style="font-size:11px;color:var(--blue);font-family:'DM Mono',monospace;text-align:right;margin-top:2px">—</div>
+      </div>
+    </div>
+  </div>
+  <div class="dca-banner on-track" id="dcaBannerV" style="margin-bottom:16px">
+    <div class="dca-left">
+      <div class="dca-emoji" id="dcaEmojiV">📈</div>
+      <div>
+        <div class="dca-title" id="dcaTitleV">DCA recommandé ce mois</div>
+        <div class="dca-desc" id="dcaDescV">—</div>
+      </div>
+    </div>
+    <div class="dca-amount on-track" id="dcaAmountV">—</div>
+  </div>
+  <div class="news-panel mobile-section" style="margin-bottom:16px">
+    <div class="news-panel-header">
+      <div class="panel-title">Actualités des indices</div>
+      <button class="btn" id="newsRefreshBtnV" onclick="fetchNews()" style="font-size:11px;padding:4px 10px">↻ Actualiser</button>
+    </div>
+    <div id="newsGroupsV"><div class="news-empty">Chargement…</div></div>
+  </div>
+  <div class="history-panel mobile-section" id="sectionHistoryV">
+    <div class="history-panel-header">
+      <div class="panel-title">Historique des achats</div>
+      <span id="histCountV" class="neu" style="font-size:11px;font-family:'DM Mono',monospace">—</span>
+    </div>
+    <div id="histGroupsV"><div class="empty">Chargement…</div></div>
+  </div>
+  <div class="statusbar">
+    <span><span class="live-dot"></span>Cours différés ~15min · Yahoo Finance</span>
+    <span>PEA · Trade Republic · Paris</span>
+  </div>
+</div><!-- /vert-layout -->
+
 </div><!-- /wrap -->
 
 <!-- MOBILE NAV -->
@@ -629,6 +849,7 @@ const MARKET_OPEN_H=8, MARKET_CLOSE_H=16, MARKET_CLOSE_M=30;
 
 let cfg={age:26,target_age:50,target:1000000,annual_return:7,prior_invested:0};
 let buys=[],prices={},historicalData={},dailyData={};
+const setEl=(id,val,html=false)=>{const e=document.getElementById(id);if(e){if(html)e.innerHTML=val;else e.textContent=val;}};
 let chartFilter='MAX';
 let historyCache={};
 // Store pts for tooltip
@@ -795,28 +1016,23 @@ function render(){
   const progress=Math.min(100,(total/cfg.target)*100);
   const dca=recommendedDCA(total),lastDep=lastMonthDeposit();
 
-  document.getElementById('kpiTotal').textContent=total>0?eur(total):'—';
-  document.getElementById('kpiPnl').innerHTML=invested>0
-    ?`<span class="${pnl>=0?'pos':'neg'}">${pnl>=0?'+':''}${eur(pnl)}</span> P&L`
-    :'<span class="neu">Aucune position</span>';
-  document.getElementById('kpiInvested').textContent=eur(invested);
-  document.getElementById('kpiInvestedSub').textContent=`${buys.length} achat${buys.length>1?'s':''}${cfg.prior_invested>0?` · +${eur(cfg.prior_invested)} antérieurs`:''}`;
-  document.getElementById('kpiPerf').innerHTML=`<span class="${perf>=0?'pos':'neg'}">${sgn(perf)}%</span><span style="font-size:15px;font-weight:500;margin-left:8px;color:${perf>=0?'var(--accent)':'var(--red)'}">${perfEur>=0?'+':''}${eur(perfEur)}</span>`;
-  const perfLabels={'1J':"aujourd'hui",'1M':'sur 1 mois','6M':'sur 6 mois','YTD':`YTD ${new Date().getFullYear()}`,'MAX':"depuis l'ouverture"};
-  document.getElementById('kpiPerfSub').textContent=perfLabels[chartFilter]||"depuis l'ouverture";
-  document.getElementById('kpiProgress').textContent=fmt(progress,2)+'%';
-  document.getElementById('kpiProgressSub').textContent=`objectif ${cfg.target_age} ans · ${new Date().getFullYear()+(cfg.target_age-cfg.age)}`;
+  setEl('kpiTotal',total>0?eur(total):'—');
+  const pnlHTML=invested>0?`<span class="${pnl>=0?'pos':'neg'}">${pnl>=0?'+':''}${eur(pnl)}</span> P&L`:'<span class="neu">Aucune position</span>';
+  setEl('kpiPnl',pnlHTML,true);
+  setEl('kpiPnlV',pnlHTML,true);
+  setEl('kpiInvested',eur(invested));setEl('kpiInvestedV',eur(invested));
+  const investedSub=`${buys.length} achat${buys.length>1?'s':''}${cfg.prior_invested>0?` · +${eur(cfg.prior_invested)} antérieurs`:''}`;setEl('kpiInvestedSub',investedSub);setEl('kpiInvestedSubV',investedSub);
+  const perfHTML=`<span class="${perf>=0?'pos':'neg'}">${sgn(perf)}%</span><span style="font-size:15px;font-weight:500;margin-left:8px;color:${perf>=0?'var(--accent)':'var(--red)'}">${perfEur>=0?'+':''}${eur(perfEur)}</span>`;setEl('kpiPerf',perfHTML,true);setEl('kpiPerfV',perfHTML,true);
+  const perfLabels={'1J':"aujourd'hui",'1M':'sur 1 mois','6M':'sur 6 mois','YTD':`YTD ${new Date().getFullYear()}`,'MAX':"depuis l'ouverture"};const perfSub=perfLabels[chartFilter]||"depuis l'ouverture";setEl('kpiPerfSub',perfSub);setEl('kpiPerfSubV',perfSub);
+  setEl('kpiProgress',fmt(progress,2)+'%');setEl('kpiProgressV',fmt(progress,2)+'%');
+  const progrSub=`objectif ${cfg.target_age} ans · ${new Date().getFullYear()+(cfg.target_age-cfg.age)}`;setEl('kpiProgressSub',progrSub);setEl('kpiProgressSubV',progrSub);
 
   const state=lastDep===0?'on-track':lastDep>=dca*0.9?(lastDep>dca*1.15?'ahead':'on-track'):'off-track';
-  document.getElementById('dcaBanner').className=`dca-banner ${state}`;
-  document.getElementById('dcaAmount').className=`dca-amount ${state}`;
-  document.getElementById('dcaAmount').textContent=dca>0?eur(Math.round(dca)):'—';
-  document.getElementById('dcaEmoji').textContent=state==='ahead'?'🚀':state==='off-track'?'⚠️':'📈';
-  document.getElementById('dcaTitle').textContent=state==='ahead'?'Tu es en avance sur la trajectoire':state==='off-track'?'Tu es en retard — renforce ce mois':'DCA recommandé ce mois';
-  const thisMonth=new Date().toLocaleDateString('fr-FR',{month:'long'});
-  document.getElementById('dcaDesc').textContent=lastDep>0
-    ?`${thisMonth} : ${eur(Math.round(lastDep))} versés`
-    :`${thisMonth} · aucun versement enregistré`;
+  ['dcaBanner','dcaBannerV'].forEach(id=>{const e=document.getElementById(id);if(e)e.className=`dca-banner ${state}`;});
+  ['dcaAmount','dcaAmountV'].forEach(id=>{const e=document.getElementById(id);if(e){e.className=`dca-amount ${state}`;e.textContent=dca>0?eur(Math.round(dca)):'—';}});
+  const dcaEmo=state==='ahead'?'🚀':state==='off-track'?'⚠️':'📈';['dcaEmoji','dcaEmojiV'].forEach(id=>setEl(id,dcaEmo));
+  const dcaTit=state==='ahead'?'Tu es en avance':state==='off-track'?'Tu es en retard — renforce ce mois':'DCA recommandé';['dcaTitle','dcaTitleV'].forEach(id=>setEl(id,dcaTit));
+  const thisMonth=new Date().toLocaleDateString('fr-FR',{month:'long'});const dcaD=lastDep>0?`${thisMonth} : ${eur(Math.round(lastDep))} versés`:`${thisMonth} · aucun versement`;['dcaDesc','dcaDescV'].forEach(id=>setEl(id,dcaD));
 
   renderChart(total);
   renderProjection(total);
@@ -828,8 +1044,8 @@ function render(){
 
 // ── MARKET STATUS ────────────────────────────────────────────────────────────
 function updateMarketStatus(){
-  const el=document.getElementById('marketStatus');
-  if(!el) return;
+  ['marketStatus','marketStatusV'].forEach(msId=>{
+  const el=document.getElementById(msId);if(!el)return;
   const now=new Date();
   // Euronext Paris: 09:00–17:30 Paris time (CET=UTC+1, CEST=UTC+2)
   // Approximate with UTC offset: use getTimezoneOffset to detect local, but simpler:
@@ -865,6 +1081,7 @@ function updateMarketStatus(){
     const hTo=Math.floor(minsToOpen/60),mTo=minsToOpen%60;
     el.innerHTML=`<span style="width:6px;height:6px;border-radius:50%;background:var(--muted);display:inline-block"></span><span style="color:var(--muted2)">Fermé</span><span style="color:var(--muted)">· ouvre dans ${hTo}h${String(mTo).padStart(2,'0')}</span>`;
   }
+  });
 }
 
 // ── MAIN CHART ────────────────────────────────────────────────────────────────
@@ -875,8 +1092,9 @@ function setChartFilter(f){
   render(); // update perf label immediately
 }
 
+function isDesktop(){return window.innerWidth>=1280;}
 function renderChart(currentTotal){
-  const canvas=document.getElementById('mainCanvas');
+  const canvas=document.getElementById(isDesktop()?'mainCanvas':'mainCanvasV');
   const ctx=canvas.getContext('2d');
   const W=canvas.offsetWidth||700,H=canvas.offsetHeight||220;
   canvas.width=W*2;canvas.height=H*2;ctx.scale(2,2);
@@ -1076,7 +1294,7 @@ function renderChart(currentTotal){
 let _hoverPt=null;
 
 function initMainCursor(){
-  const canvas=document.getElementById('mainCanvas');
+  const canvas=document.getElementById(isDesktop()?'mainCanvas':'mainCanvasV');
   if(!canvas) return;
   canvas.addEventListener('mousemove', e=>{
     if(!mainPts||mainPts.length<2){_hoverPt=null;return;}
@@ -1196,7 +1414,7 @@ function setupProjTooltip(){
 
 // ── PROJECTION ────────────────────────────────────────────────────────────────
 function renderProjection(currentTotal){
-  const canvas=document.getElementById('projCanvas');
+  const canvas=document.getElementById(isDesktop()?'projCanvas':'projCanvasV');
   if(!canvas) return;
   const ctx=canvas.getContext('2d');
   const W=canvas.offsetWidth||260,H=canvas.offsetHeight||100;
@@ -1254,7 +1472,7 @@ function renderProjection(currentTotal){
 // ── ETF TABLE ────────────────────────────────────────────────────────────────
 function renderETFs(){
   const held=partsHeld(),prus=pruByEtf(),totalVal=portfolioValue()||1;
-  document.getElementById('etfTbody').innerHTML=ETFS.map((e,i)=>{
+  const etfHtml=ETFS.map((e,i)=>{
     const p=prices[e.ticker],price=p?.price??0;
     // Var. jour depuis dailyData dédié (2d interval=1d)
     const todayStr=new Date().toISOString().split('T')[0];
@@ -1281,6 +1499,7 @@ function renderETFs(){
       </div>
     </td></tr>`;
   }).join('');
+  ['etfTbody','etfTbodyV'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=etfHtml;});
 }
 
 function toggleEtfDetail(i){
@@ -1338,7 +1557,8 @@ function renderDonut(){
   const sum=vals.reduce((a,b)=>a+b,0);
   if(sum===0) return;
   const w=vals.map(v=>v/sum);
-  const svg=document.getElementById('donutSvg');
+  ['donutSvg','donutSvgV'].forEach(svgId=>{
+  const svg=document.getElementById(svgId);if(!svg)return;
   while(svg.children.length>1) svg.removeChild(svg.lastChild);
   const r=42,cx=55,cy=55,sw=14,circ=2*Math.PI*r;
   let off=0;
@@ -1353,21 +1573,25 @@ function renderDonut(){
     c.style.transform='rotate(-90deg)';c.style.transformOrigin=`${cx}px ${cy}px`;
     svg.appendChild(c);off+=dash;
   });
-  document.getElementById('donutLegend').innerHTML=ETFS.map((e,i)=>`
+  });
+  ['donutLegend','donutLegendV'].forEach(did=>{
+  const dl=document.getElementById(did);if(!dl)return;
+  dl.innerHTML=ETFS.map((e,i)=>`
     <div class="donut-item"><div class="donut-dot" style="background:${COLORS[i]}"></div>
     <span class="donut-label">${e.label} <span style="color:var(--muted);font-size:10px">${e.zone}</span></span>
     <span class="donut-pct">${fmt(w[i]*100,1)}%</span></div>`).join('');
+  });
 }
 
 // ── HISTORY ───────────────────────────────────────────────────────────────────
 function renderHistory(){
   const total=buys.length;
-  document.getElementById('histCount').textContent=`${total} achat${total>1?'s':''}`;
+  setEl('histCount',`${total} achat${total>1?'s':''}`);setEl('histCountV',`${total} achat${total>1?'s':''}`);
   if(total===0){document.getElementById('histGroups').innerHTML='<div class="empty">Aucun achat enregistré.</div>';return;}
   const groups=ETFS.map((etf,i)=>({
     etf,i,buys:buys.filter(b=>b.etfIdx===i).sort((a,b)=>new Date(b.date)-new Date(a.date))
   })).filter(g=>g.buys.length>0);
-  document.getElementById('histGroups').innerHTML=groups.map(g=>{
+  const histHtml=groups.map(g=>{
     const totalParts=g.buys.reduce((s,b)=>s+b.parts,0);
     const totalVersé=g.buys.reduce((s,b)=>s+b.parts*b.price,0);
     const pru=totalVersé/totalParts;
@@ -1408,6 +1632,7 @@ function renderHistory(){
       </div>
     </div>`;
   }).join('');
+  ['histGroups','histGroupsV'].forEach(id=>{const e=document.getElementById(id);if(e)e.innerHTML=histHtml;});
 }
 
 function toggleGroup(el){
@@ -1530,17 +1755,18 @@ const ETF_COLORS_MAP={'ESEE':'#00b896','AE57':'#3b7ef6','ETSZ':'#8b5cf6','18MH':
 
 async function fetchNews(){
   const btn=document.getElementById('newsRefreshBtn');
-  const container=document.getElementById('newsGroups');
+  const containers=['newsGroups','newsGroupsV'].map(id=>document.getElementById(id)).filter(Boolean);
+  const container=containers[0]||{innerHTML:''};
   if(btn) btn.textContent='…';
   try{
     const r=await fetch('/api/news');
     if(!r.ok) throw new Error('HTTP '+r.status);
     const {news}=await r.json();
     if(!news||news.length===0){
-      container.innerHTML='<div class="news-empty">Aucune actualité disponible.</div>';
+      containers.forEach(ct=>ct.innerHTML='<div class="news-empty">Aucune actualité disponible.</div>');container.innerHTML='';return;
       return;
     }
-    container.innerHTML=news.map((group,gi)=>{
+    const newsHtml2=news.map((group,gi)=>{
       if(!group.items||group.items.length===0) return '';
       const color=ETF_COLORS_MAP[group.etf]||'var(--accent)';
       const items=group.items.map(item=>{
@@ -1565,8 +1791,9 @@ async function fetchNews(){
         </div>
       </div>`;
     }).join('');
+    containers.forEach(ct=>ct.innerHTML=newsHtml2);
   }catch(e){
-    container.innerHTML=`<div class="news-empty">Erreur de chargement : ${e.message}</div>`;
+    containers.forEach(ct=>ct.innerHTML=`<div class="news-empty">Erreur de chargement : ${e.message}</div>`);
   }finally{
     if(btn) btn.textContent='actualiser';
   }
