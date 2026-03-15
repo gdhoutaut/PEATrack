@@ -232,7 +232,7 @@ canvas{display:block;width:100%;height:100%;}
 .news-group-header{display:flex;align-items:center;gap:8px;padding:12px 20px 8px;}
 .news-group-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;}
 .news-group-etf{font-size:10px;font-family:'JetBrains Mono',monospace;color:var(--muted);background:var(--s2);padding:2px 6px;border-radius:4px;}
-.news-item{display:flex;flex-direction:column;gap:3px;padding:8px 20px;border-top:1px solid var(--border);text-decoration:none;transition:background .12s;}
+.news-item{display:flex;flex-direction:column;gap:3px;padding:10px 20px;border-top:1px solid var(--border);text-decoration:none;transition:background .12s;}
 .news-item:hover{background:var(--s2);}
 .news-item-title{font-size:13px;color:var(--dark);line-height:1.4;font-weight:500;}
 .news-item-meta{font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;}
@@ -1477,7 +1477,7 @@ async function fetchNews(){
       container.innerHTML='<div class="news-empty">Aucune actualité disponible.</div>';
       return;
     }
-    container.innerHTML=news.map(group=>{
+    container.innerHTML=news.map((group,gi)=>{
       if(!group.items||group.items.length===0) return '';
       const color=ETF_COLORS_MAP[group.etf]||'var(--accent)';
       const items=group.items.map(item=>{
@@ -1487,12 +1487,19 @@ async function fetchNews(){
           <div class="news-item-meta">${item.source?item.source+' · ':''}${date}</div>
         </a>`;
       }).join('');
-      return `<div class="news-group">
-        <div class="news-group-header">
-          <span class="news-group-label" style="color:${color}">${group.label}</span>
-          <span class="news-group-etf">${group.etf}</span>
+      return `<div class="etf-group">
+        <div class="etf-group-header" onclick="toggleNewsGroup(this)">
+          <div class="etf-group-left">
+            <span class="etf-group-ticker" style="color:${color}">${group.label}</span>
+            <span class="etf-group-name">${group.etf} · ${group.items.length} article${group.items.length>1?'s':''}</span>
+          </div>
+          <div class="etf-group-right">
+            <span class="chevron">▼</span>
+          </div>
         </div>
-        ${items}
+        <div class="etf-group-rows">
+          ${items}
+        </div>
       </div>`;
     }).join('');
   }catch(e){
@@ -1500,6 +1507,11 @@ async function fetchNews(){
   }finally{
     if(btn) btn.textContent='↻ Actualiser';
   }
+}
+
+function toggleNewsGroup(el){
+  el.nextElementSibling.classList.toggle('open');
+  el.querySelector('.chevron').classList.toggle('open');
 }
 
 // ── THEME ─────────────────────────────────────────────────────────────────────
