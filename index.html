@@ -57,7 +57,7 @@
 
 /* ─── RESET ───────────────────────────────────────────────────────────────── */
 *{margin:0;padding:0;box-sizing:border-box;}
-body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;line-height:1.5;min-height:100vh;}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;line-height:1.5;}
 a{color:inherit;text-decoration:none;}
 canvas{display:block;width:100%;height:100%;}
 
@@ -1248,6 +1248,8 @@ async function fetchNews(){
   const btn=document.getElementById('newsRefreshBtn');
   const container=document.getElementById('newsGroups');
   if(btn) btn.textContent='…';
+  // Save now before fetch — next time these articles won't be 'new'
+  const fetchTime=Date.now();
   try{
     const r=await fetch('/api/news');
     if(!r.ok) throw new Error('HTTP '+r.status);
@@ -1280,14 +1282,28 @@ async function fetchNews(){
       </div>`;
     }).join('');
     if(container) container.innerHTML=html;
+    localStorage.setItem('pea-news-seen', fetchTime.toString());
   }catch(e){if(container) container.innerHTML=`<div class="news-empty">Erreur : ${e.message}</div>`;}
   finally{
     if(btn) btn.textContent='↻';
-    // Mark current time as last seen after refresh
-    localStorage.setItem('pea-news-seen', Date.now().toString());
   }
 }
-function toggleNewsGroup(el){el.nextElementSibling.classList.toggle('open');el.querySelector('.chevron').classList.toggle('open');}
+function toggleNewsGroup(el){
+  const rows=el.nextElementSibling;
+  rows.classList.toggle('open');
+  el.querySelector('.chevron').classList.toggle('open');
+  // Mark articles as seen when opening
+  if(rows.classList.contains('open')){
+    const links=[...rows.querySelectorAll('.news-item')].map(a=>a.href);
+    const seen=JSON.parse(localStorage.getItem('pea-news-seen-links')||'[]');
+    const merged=[...new Set([...seen,...links])].slice(-200); // keep last 200
+    localStorage.setItem('pea-news-seen-links',JSON.stringify(merged));
+    // Remove badges in this group
+    rows.querySelectorAll('.news-badge').forEach(b=>b.remove());
+    const dot=el.querySelector('.news-new-dot');
+    if(dot) dot.remove();
+  }
+}
 
 // ── MODALS ────────────────────────────────────────────────────────────────────
 function openBuy(){
