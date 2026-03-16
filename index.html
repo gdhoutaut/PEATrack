@@ -103,11 +103,25 @@ canvas{display:block;width:100%;height:100%;}
 /* COL LEFT */
 .col-left{
   width:300px;flex-shrink:0;
-  border-right:1px solid var(--border);
   padding:24px 20px;
   display:flex;flex-direction:column;gap:16px;
   position:sticky;top:56px;height:calc(100vh - 56px);overflow-y:auto;
   scrollbar-width:thin;scrollbar-color:var(--border) transparent;
+}
+
+/* RESIZE HANDLES */
+.resize-handle{
+  width:4px;flex-shrink:0;
+  position:sticky;top:56px;height:calc(100vh - 56px);
+  cursor:col-resize;
+  background:transparent;
+  transition:background .15s;
+  z-index:10;
+  border-left:1px solid var(--border);
+}
+.resize-handle:hover,.resize-handle.dragging{
+  background:var(--accent);
+  border-color:var(--accent);
 }
 
 /* KPI CARDS */
@@ -398,6 +412,9 @@ canvas{display:block;width:100%;height:100%;}
 
   </aside>
 
+  <!-- Handle gauche/centre -->
+  <div class="resize-handle" id="handleLeft"></div>
+
   <!-- ── COL CENTER ─────────────────────────────────────────────────────────── -->
   <main class="col-center">
 
@@ -444,6 +461,9 @@ canvas{display:block;width:100%;height:100%;}
     </div>
 
   </main>
+
+  <!-- Handle centre/droite -->
+  <div class="resize-handle" id="handleRight"></div>
 
   <!-- ── COL RIGHT ──────────────────────────────────────────────────────────── -->
   <aside class="col-right">
@@ -1327,6 +1347,57 @@ loadData().then(()=>fetchHistoricalData());
 fetchPrices();
 setInterval(fetchPrices,5*60*1000);
 setInterval(fetchHistoricalData,15*60*1000);
+
+// ── RESIZE HANDLES ────────────────────────────────────────────────────────────
+function initResize(){
+  const colLeft=document.querySelector('.col-left');
+  const colRight=document.querySelector('.col-right');
+  const handleLeft=document.getElementById('handleLeft');
+  const handleRight=document.getElementById('handleRight');
+  if(!colLeft||!colRight||!handleLeft||!handleRight) return;
+
+  // Restore saved widths
+  const savedLeft=localStorage.getItem('pea-col-left');
+  const savedRight=localStorage.getItem('pea-col-right');
+  if(savedLeft) colLeft.style.width=savedLeft+'px';
+  if(savedRight) colRight.style.width=savedRight+'px';
+
+  function makeResizable(handle, col, side){
+    let startX,startW;
+    handle.addEventListener('mousedown',e=>{
+      startX=e.clientX;
+      startW=col.offsetWidth;
+      handle.classList.add('dragging');
+      document.body.style.cursor='col-resize';
+      document.body.style.userSelect='none';
+
+      function onMove(e){
+        const dx=side==='left'?e.clientX-startX:startX-e.clientX;
+        const newW=Math.min(Math.max(startW+dx, 200), 520);
+        col.style.width=newW+'px';
+      }
+      function onUp(){
+        handle.classList.remove('dragging');
+        document.body.style.cursor='';
+        document.body.style.userSelect='';
+        localStorage.setItem(side==='left'?'pea-col-left':'pea-col-right', col.offsetWidth);
+        // Redraw canvases after resize
+        setTimeout(()=>render(),50);
+        document.removeEventListener('mousemove',onMove);
+        document.removeEventListener('mouseup',onUp);
+      }
+      document.addEventListener('mousemove',onMove);
+      document.addEventListener('mouseup',onUp);
+    });
+  }
+
+  makeResizable(handleLeft, colLeft, 'left');
+  makeResizable(handleRight, colRight, 'right');
+}
+
+window.addEventListener('load',()=>{
+  initResize();
+});
 </script>
 </body>
 </html>
