@@ -907,7 +907,8 @@ function renderChart(currentTotal,animProgress=1){
   // Clip to animated width
   const clipW=PAD.left+cW*animProgress;
   ctx.save();
-  ctx.beginPath();ctx.rect(0,0,clipW,H);ctx.clip();
+  // +12px so the live dot is never clipped
+  ctx.beginPath();ctx.rect(0,0,clipW+12,H);ctx.clip();
 
   // Area + line
   const isUp=pts[pts.length-1].value>=pts[0].value;
