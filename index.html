@@ -793,7 +793,7 @@ function animateChart(currentTotal){
   // Cancel any ongoing animation
   if(_chartAnimFrame) cancelAnimationFrame(_chartAnimFrame);
   _chartAnimating=true;
-  const duration=480; // ms
+  const duration=960; // ms
   const startTime=performance.now();
   function easeOut(t){return 1-Math.pow(1-t,3);}
   function frame(now){
@@ -922,19 +922,17 @@ function renderChart(currentTotal,animProgress=1){
   ctx.beginPath();pts.forEach((p,i)=>i===0?ctx.moveTo(toX(p.date),toY(p.value)):ctx.lineTo(toX(p.date),toY(p.value)));
   ctx.strokeStyle=lineColor;ctx.lineWidth=2;ctx.stroke();
 
-  // Live dot
+  // Live dot — blink opacity like sync-dot (no ring)
   const lp=pts[pts.length-1];
   const lpx=toX(lp.date),lpy=toY(lp.value);
-  const pulse=(Math.sin(Date.now()/500)+1)/2;
-  const [lr,lg,lb]=lineColor.replace('#','').match(/.{2}/g).map(h=>parseInt(h,16));
-  ctx.beginPath();ctx.arc(lpx,lpy,5+pulse*6,0,Math.PI*2);
-  ctx.fillStyle=`rgba(${lr},${lg},${lb},${0.25*(1-pulse)})`;ctx.fill();
+  const blink=(Math.sin(Date.now()/700)+1)/2; // 0→1, ~1.4s cycle
   ctx.beginPath();ctx.arc(lpx,lpy,4.5,0,Math.PI*2);
-  ctx.fillStyle=`rgba(${lr},${lg},${lb},${0.6+0.4*pulse})`;ctx.fill();
+  ctx.fillStyle=lineColor;
+  ctx.globalAlpha=0.35+0.65*blink;
+  ctx.fill();
+  ctx.globalAlpha=1;
   ctx.beginPath();ctx.arc(lpx,lpy,4.5,0,Math.PI*2);
-  ctx.strokeStyle=`rgba(255,255,255,${0.5+0.5*pulse})`;ctx.lineWidth=2;ctx.stroke();
-
-  ctx.restore(); // end clip
+  ctx.strokeStyle='rgba(255,255,255,.7)';ctx.lineWidth=1.5;ctx.stroke();
 
   // Buy markers MAX
   if(chartFilter==='MAX'&&buys.length>0){
@@ -950,6 +948,8 @@ function renderChart(currentTotal,animProgress=1){
       ctx.setLineDash([]);ctx.globalAlpha=1;
     });
   }
+
+  ctx.restore(); // end clip
 
   if(_hoverPt) drawCursorOnCanvas(canvas);
 }
