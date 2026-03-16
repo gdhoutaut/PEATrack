@@ -579,6 +579,8 @@ let chartFilter='MAX';
 let historyCache={};
 let mainPts=[],projPts=[];
 let _hoverPt=null;
+let _chartAnimating=false;
+let _chartAnimFrame=null;
 
 const fmt=(n,d=2)=>n==null||isNaN(n)?'—':n.toLocaleString('fr-FR',{minimumFractionDigits:d,maximumFractionDigits:d});
 const eur=(n,d=0)=>fmt(n,d)+' €';
@@ -660,6 +662,7 @@ async function fetchHistoricalData(filter){
   historicalData=newData;
   if(f!=='1J'&&f!=='YTD') historyCache[f]=newData;
   render();
+  animateChart(portfolioValue());
 }
 
 // ── COMPUTED ──────────────────────────────────────────────────────────────────
@@ -782,9 +785,28 @@ function setChartFilter(f){
   document.querySelectorAll('.cf-btn').forEach(btn=>btn.classList.toggle('active',btn.textContent===f));
   fetchHistoricalData(f);
   render();
+  // Trigger draw animation after data loads
+  setTimeout(()=>animateChart(portfolioValue()),50);
 }
 
-function renderChart(currentTotal){
+function animateChart(currentTotal){
+  // Cancel any ongoing animation
+  if(_chartAnimFrame) cancelAnimationFrame(_chartAnimFrame);
+  _chartAnimating=true;
+  const duration=480; // ms
+  const startTime=performance.now();
+  function easeOut(t){return 1-Math.pow(1-t,3);}
+  function frame(now){
+    const elapsed=now-startTime;
+    const progress=Math.min(1,easeOut(elapsed/duration));
+    renderChart(currentTotal,progress);
+    if(progress<1) _chartAnimFrame=requestAnimationFrame(frame);
+    else{_chartAnimating=false;_chartAnimFrame=null;}
+  }
+  _chartAnimFrame=requestAnimationFrame(frame);
+}
+
+function renderChart(currentTotal,animProgress=1){
   const canvas=document.getElementById('mainCanvas');
   if(!canvas) return;
   const ctx=canvas.getContext('2d');
@@ -882,6 +904,11 @@ function renderChart(currentTotal){
     for(let y=sY;y<=eY;y+=step){const d=new Date(y,0,1);if(d.getTime()>=minT&&d.getTime()<=maxT) drawXTick(toX(d),y);}
   }
 
+  // Clip to animated width
+  const clipW=PAD.left+cW*animProgress;
+  ctx.save();
+  ctx.beginPath();ctx.rect(0,0,clipW,H);ctx.clip();
+
   // Area + line
   const isUp=pts[pts.length-1].value>=pts[0].value;
   const lineColor=isUp?'#2D7A5F':'#C4603A';
@@ -906,6 +933,8 @@ function renderChart(currentTotal){
   ctx.fillStyle=`rgba(${lr},${lg},${lb},${0.6+0.4*pulse})`;ctx.fill();
   ctx.beginPath();ctx.arc(lpx,lpy,4.5,0,Math.PI*2);
   ctx.strokeStyle=`rgba(255,255,255,${0.5+0.5*pulse})`;ctx.lineWidth=2;ctx.stroke();
+
+  ctx.restore(); // end clip
 
   // Buy markers MAX
   if(chartFilter==='MAX'&&buys.length>0){
@@ -1339,7 +1368,7 @@ window.addEventListener('load',()=>{
   setupProjTooltip();
   updateMarketStatus();
   setInterval(updateMarketStatus,60000);
-  setInterval(()=>{if(mainPts&&mainPts.length>0) renderChart(portfolioValue());},1000);
+  setInterval(()=>{if(mainPts&&mainPts.length>0&&!_chartAnimating) renderChart(portfolioValue());},1000);
   fetchNews();
 });
 
