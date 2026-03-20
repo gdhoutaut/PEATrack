@@ -938,20 +938,7 @@ function renderChart(currentTotal,animProgress=1){
   ctx.beginPath();ctx.arc(lpx,lpy,4.5,0,Math.PI*2);
   ctx.strokeStyle='rgba(255,255,255,.7)';ctx.lineWidth=1.5;ctx.stroke();
 
-  // Buy markers MAX
-  if(chartFilter==='MAX'&&buys.length>0){
-    const sorted=[...buys].sort((a,b)=>a.date.localeCompare(b.date));
-    sorted.forEach(b=>{
-      const buyDate=new Date(b.date+'T12:00:00Z');
-      if(buyDate.getTime()<minT||buyDate.getTime()>maxT) return;
-      const bx=toX(buyDate),my=PAD.top+cH+6;
-      ctx.beginPath();ctx.moveTo(bx,PAD.top+cH);ctx.lineTo(bx-3.5,my+5);ctx.lineTo(bx+3.5,my+5);ctx.closePath();
-      ctx.fillStyle=COLORS[b.etfIdx];ctx.globalAlpha=0.75;ctx.fill();ctx.globalAlpha=1;
-      ctx.strokeStyle=COLORS[b.etfIdx];ctx.lineWidth=1;ctx.globalAlpha=0.2;ctx.setLineDash([2,3]);
-      ctx.beginPath();ctx.moveTo(bx,PAD.top);ctx.lineTo(bx,PAD.top+cH);ctx.stroke();
-      ctx.setLineDash([]);ctx.globalAlpha=1;
-    });
-  }
+  // Buy markers removed
 
   ctx.restore(); // end clip
 
