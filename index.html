@@ -437,6 +437,7 @@ canvas{display:block;width:100%;height:100%;}
         </div>
         <div class="chart-filters">
           <button class="cf-btn" onclick="setChartFilter('1J')">1J</button>
+          <button class="cf-btn" onclick="setChartFilter('1W')">1W</button>
           <button class="cf-btn" onclick="setChartFilter('1M')">1M</button>
           <button class="cf-btn" onclick="setChartFilter('6M')">6M</button>
           <button class="cf-btn" onclick="setChartFilter('YTD')">YTD</button>
@@ -652,7 +653,8 @@ async function fetchHistoricalData(filter){
   if(f!=='1J'&&historyCache[f]){historicalData=historyCache[f];render();return;}
   let interval,fromStr;
   const today=new Date();
-  if(f==='1J'){interval='5m';fromStr=today.toISOString().split('T')[0];}
+  if(f==='1J'){interval='1m';fromStr=today.toISOString().split('T')[0];}
+  else if(f==='1W'){interval='1h';const d=new Date(today);d.setDate(d.getDate()-7);fromStr=d.toISOString().split('T')[0];}
   else if(f==='1M'){interval='1d';const d=new Date(today);d.setMonth(d.getMonth()-1);fromStr=d.toISOString().split('T')[0];}
   else if(f==='6M'){interval='1wk';const d=new Date(today);d.setMonth(d.getMonth()-6);fromStr=d.toISOString().split('T')[0];}
   else if(f==='YTD'){interval='1wk';fromStr=`${today.getFullYear()}-01-01`;}
@@ -663,7 +665,7 @@ async function fetchHistoricalData(filter){
   const newData={};
   results.forEach((r,i)=>{if(r.status==='fulfilled'&&r.value?.points) newData[ETFS[i].ticker]=r.value.points;});
   historicalData=newData;
-  if(f!=='1J'&&f!=='YTD') historyCache[f]=newData;
+  if(f!=='1J'&&f!=='1W'&&f!=='YTD') historyCache[f]=newData;
   render();
   animateChart(portfolioValue());
 }
@@ -724,7 +726,7 @@ function render(){
 
   const pnlHTML=invested>0?`<span class="${pnl>=0?'pos':'neg'}">${pnl>=0?'+':''}${eur(pnl)}</span> P&L`:'<span class="neu">Aucune position</span>';
   const perfHTML=`<span class="${perf>=0?'pos':'neg'}">${sgn(perf)}%</span><span style="font-size:14px;margin-left:8px;color:${perf>=0?'var(--accent)':'var(--terra)'}">${perfEur>=0?'+':''}${eur(perfEur)}</span>`;
-  const perfLabels={'1J':"aujourd'hui",'1M':'sur 1 mois','6M':'sur 6 mois','YTD':`YTD ${new Date().getFullYear()}`,'MAX':"depuis l'ouverture"};
+  const perfLabels={'1J':"aujourd'hui",'1W':'sur 1 semaine','1M':'sur 1 mois','6M':'sur 6 mois','YTD':`YTD ${new Date().getFullYear()}`,'MAX':"depuis l'ouverture"};
   const investedSub=`${buys.length} achat${buys.length>1?'s':''}${cfg.prior_invested>0?` · +${eur(cfg.prior_invested)} antérieurs`:''}`;
   const progrSub=`objectif ${cfg.target_age} ans · ${new Date().getFullYear()+(cfg.target_age-cfg.age)}`;
 
@@ -831,18 +833,22 @@ function renderChart(currentTotal,animProgress=1){
 
   const refTicker=tickers[0];
   let allDates=historicalData[refTicker].map(p=>p.date).sort();
-  if(chartFilter==='1J'){
+  if(chartFilter==='1J'||chartFilter==='1W'){
     const todayStr=new Date().toISOString().split('T')[0];
     allDates=allDates.filter(d=>{
       const dt=new Date(d);
-      if(dt.toISOString().split('T')[0]!==todayStr) return false;
+      // For 1J: today only. For 1W: last 7 days
+      if(chartFilter==='1J'&&dt.toISOString().split('T')[0]!==todayStr) return false;
       const h=dt.getUTCHours(),m=dt.getUTCMinutes(),mins=h*60+m;
+      const dow=dt.getUTCDay();
+      // Skip weekends
+      if(dow===0||dow===6) return false;
       return mins>=MARKET_OPEN_H*60&&mins<=MARKET_CLOSE_H*60+MARKET_CLOSE_M;
     });
   }
 
   const sortedBuys=[...buys].sort((a,b)=>a.date.localeCompare(b.date));
-  const isIntraday=chartFilter==='1J';
+  const isIntraday=chartFilter==='1J'||chartFilter==='1W';
   const pts=[];
   allDates.forEach(dateStr=>{
     const dateForBuy=isIntraday?dateStr.split('T')[0]:dateStr;
@@ -896,6 +902,20 @@ function renderChart(currentTotal,animProgress=1){
   if(chartFilter==='1J'){
     let d=new Date(Date.UTC(new Date(minT).getUTCFullYear(),new Date(minT).getUTCMonth(),new Date(minT).getUTCDate(),MARKET_OPEN_H,0,0));
     while(d.getTime()<=maxT){if(d.getTime()>=minT) drawXTick(toX(d),d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',timeZone:'UTC'}));d=new Date(d.getTime()+2*3600000);}
+  } else if(chartFilter==='1W'){
+    // One tick per trading day at open
+    const seen=new Set();
+    let d=new Date(minT);
+    while(d.getTime()<=maxT){
+      const dayStr=d.toISOString().split('T')[0];
+      if(!seen.has(dayStr)){
+        seen.add(dayStr);
+        const open=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate(),MARKET_OPEN_H,0,0));
+        if(open.getTime()>=minT&&open.getTime()<=maxT)
+          drawXTick(toX(open),open.toLocaleDateString('fr-FR',{weekday:'short',day:'2-digit',month:'short'}));
+      }
+      d=new Date(d.getTime()+3600000);
+    }
   } else if(spanDays<=40){
     let d=new Date(new Date(minT).getFullYear(),new Date(minT).getMonth(),new Date(minT).getDate());
     while(d.getTime()<=maxT){if(d.getTime()>=minT) drawXTick(toX(d),d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short'}));d=new Date(d.getTime()+7*86400000);}
@@ -970,7 +990,7 @@ function initMainCursor(){
     const isUp=mainPts[mainPts.length-1].value>=mainPts[0].value;
     _hoverPt={xPos,yPos,color:isUp?'#2D7A5F':'#C4603A',
       valText:eur(Math.round(closest.value)),
-      dateText:chartFilter==='1J'?closest.date.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):closest.date.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}),
+      dateText:(chartFilter==='1J'||chartFilter==='1W')?closest.date.toLocaleTimeString('fr-FR',{weekday:chartFilter==='1W'?'short':undefined,hour:'2-digit',minute:'2-digit'}):closest.date.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}),
       W,H,PAD_T,PAD_B};
     renderChart(portfolioValue());
   });
@@ -1211,9 +1231,7 @@ function renderHistory(){
           <span class="etf-group-name">${g.etf.name}</span>
         </div>
         <div class="etf-group-right">
-          <div class="etf-group-stat"><div class="etf-group-stat-label">PRU</div><div class="etf-group-stat-value">${fmt(pru)}€</div></div>
-          <div class="etf-group-stat"><div class="etf-group-stat-label">Valeur</div><div class="etf-group-stat-value">${currentVal?eur(currentVal):'—'}</div></div>
-          <div class="etf-group-stat"><div class="etf-group-stat-label">P&L</div><div class="etf-group-stat-value ${pnl==null?'neu':pnl>=0?'pos':'neg'}">${pnl!=null?(pnl>=0?'+':'')+eur(pnl):'—'}</div></div>
+          <span class="etf-group-name" style="color:var(--muted)">${g.buys.length} achat${g.buys.length>1?'s':''}</span>
           <span class="chevron">▼</span>
         </div>
       </div>
