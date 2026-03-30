@@ -891,23 +891,34 @@ function renderChart(currentTotal,animProgress=1){
   if(currentTotal>0&&!isIntraday) pts.push({date:new Date(),value:currentTotal});
   mainPts=[...pts];
 
-  // % mode : (valeur - total_investi_à_ce_jour) / total_investi * 100
-  // Même calcul que la carte Performance, tracé dans le temps
+  // % mode : performance relative au premier point de la période filtrée
+  // (valeur - investedSoFar) / investedSoFar * 100, normalisé sur la période
   twrPts=[];
   if(pts.length>=2&&chartMode==='pct'){
     const sortedBuys2=[...buys].sort((a,b)=>a.date.localeCompare(b.date));
-    pts.forEach(p=>{
+    // Calcul du % absolu pour chaque point
+    const absPcts=pts.map(p=>{
       const dateStr=p.date.toISOString().split('T')[0];
       const investedSoFar=(cfg.prior_invested||0)+sortedBuys2
         .filter(b=>b.date<=dateStr)
         .reduce((s,b)=>s+b.parts*b.price,0);
-      if(investedSoFar>0){
-        const pct=(p.value-investedSoFar)/investedSoFar*100;
-        twrPts.push({date:p.date,value:pct});
-      }
+      return investedSoFar>0?(p.value-investedSoFar)/investedSoFar*100:null;
     });
+    // Normaliser : soustraire la valeur du premier point valide pour que la courbe parte de ce niveau
+    const firstValid=absPcts.find(v=>v!==null);
+    if(firstValid!==null){
+      pts.forEach((p,i)=>{
+        if(absPcts[i]!==null){
+          // Pour MAX : afficher le % absolu (depuis le début)
+          // Pour les autres filtres : afficher la variation depuis le début de la période
+          const val=chartFilter==='MAX'?absPcts[i]:absPcts[i]-(firstValid??0);
+          twrPts.push({date:p.date,value:val});
+        }
+      });
+    }
   }
   const drawPts=chartMode==='pct'&&twrPts.length>=2?twrPts:pts;
+
 
   if(pts.length<2){
     ctx.fillStyle=textCol;ctx.font='12px DM Sans';ctx.textAlign='center';
