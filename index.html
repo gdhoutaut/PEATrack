@@ -436,17 +436,12 @@ canvas{display:block;width:100%;height:100%;}
           <div id="marketStatus"></div>
         </div>
         <div style="display:flex;align-items:center;gap:8px">
-        <div class="chart-filters mob-hide" id="modeToggle">
-          <button class="cf-btn active" id="modeEur" onclick="setChartMode('eur')">€</button>
-          <button class="cf-btn" id="modePct" onclick="setChartMode('%')">%</button>
-        </div>
         <div class="chart-filters">
           <button class="cf-btn" onclick="setChartFilter('1J')">1J</button>
           <button class="cf-btn" onclick="setChartFilter('1M')">1M</button>
           <button class="cf-btn" onclick="setChartFilter('6M')">6M</button>
           <button class="cf-btn" onclick="setChartFilter('YTD')">YTD</button>
           <button class="cf-btn active" onclick="setChartFilter('MAX')">MAX</button>
-        </div>
         </div>
       </div>
       <div class="chart-wrap" style="position:relative">
@@ -586,11 +581,10 @@ let buys=[],prices={},historicalData={},dailyData={};
 const setEl=(id,val,html=false)=>{const e=document.getElementById(id);if(e){if(html)e.innerHTML=val;else e.textContent=val;}};
 let chartFilter='MAX';
 let historyCache={};
-let mainPts=[],projPts=[],twrPts=[];
+let mainPts=[],projPts=[];
 let _hoverPt=null;
 let _chartAnimating=false;
 let _chartAnimFrame=null;
-let chartMode='eur'; // 'eur' or 'pct'
 
 const fmt=(n,d=2)=>n==null||isNaN(n)?'—':n.toLocaleString('fr-FR',{minimumFractionDigits:d,maximumFractionDigits:d});
 const eur=(n,d=0)=>fmt(n,d)+' €';
@@ -790,13 +784,6 @@ function updateMarketStatus(){
 }
 
 // ── CHART ─────────────────────────────────────────────────────────────────────
-function setChartMode(mode){
-  chartMode=mode==='%'?'pct':'eur';
-  document.getElementById('modeEur').classList.toggle('active',chartMode==='eur');
-  document.getElementById('modePct').classList.toggle('active',chartMode==='pct');
-  animateChart(portfolioValue());
-}
-
 function setChartFilter(f){
   chartFilter=f;
   document.querySelectorAll('.cf-btn').forEach(btn=>btn.classList.toggle('active',btn.textContent===f));
@@ -891,33 +878,6 @@ function renderChart(currentTotal,animProgress=1){
   if(currentTotal>0&&!isIntraday) pts.push({date:new Date(),value:currentTotal});
   mainPts=[...pts];
 
-  // % mode : performance relative au premier point de la période filtrée
-  // (valeur - investedSoFar) / investedSoFar * 100, normalisé sur la période
-  twrPts=[];
-  if(pts.length>=2&&chartMode==='pct'){
-    const sortedBuys2=[...buys].sort((a,b)=>a.date.localeCompare(b.date));
-    // Calcul du % absolu pour chaque point
-    const absPcts=pts.map(p=>{
-      const dateStr=p.date.toISOString().split('T')[0];
-      const investedSoFar=(cfg.prior_invested||0)+sortedBuys2
-        .filter(b=>b.date<=dateStr)
-        .reduce((s,b)=>s+b.parts*b.price,0);
-      return investedSoFar>0?(p.value-investedSoFar)/investedSoFar*100:null;
-    });
-    // Normaliser : soustraire la valeur du premier point valide pour que la courbe parte de ce niveau
-    const firstValid=absPcts.find(v=>v!==null);
-    if(firstValid!==null){
-      pts.forEach((p,i)=>{
-        if(absPcts[i]!==null){
-          // Pour MAX : afficher le % absolu (depuis le début)
-          // Pour les autres filtres : afficher la variation depuis le début de la période
-          const val=chartFilter==='MAX'?absPcts[i]:absPcts[i]-(firstValid??0);
-          twrPts.push({date:p.date,value:val});
-        }
-      });
-    }
-  }
-  const drawPts=chartMode==='pct'&&twrPts.length>=2?twrPts:pts;
 
 
   if(pts.length<2){
@@ -925,12 +885,12 @@ function renderChart(currentTotal,animProgress=1){
     ctx.fillText('Données insuffisantes',W/2,H/2);return;
   }
 
-  const allT=drawPts.map(p=>p.date.getTime());
-  const allV=drawPts.map(p=>p.value);
+  const allT=pts.map(p=>p.date.getTime());
+  const allV=pts.map(p=>p.value);
   const minT=Math.min(...allT),maxT=Math.max(...allT);
   const vPad=chartFilter==='1J'?0.15:chartFilter==='1M'?0.12:0.10;
   const vMin=Math.min(...allV),vMax=Math.max(...allV),vRange=vMax-vMin||vMax*0.01;
-  const minV=vMin-vRange*vPad-(chartMode==='pct'&&vMin>=0?0:0);
+  const minV=vMin-vRange*vPad;
   const maxV=vMax+vRange*vPad;
   const toX=d=>PAD.left+((d.getTime()-minT)/(maxT-minT))*cW;
   const toY=v=>PAD.top+(1-(v-minV)/(maxV-minV))*cH;
@@ -941,7 +901,7 @@ function renderChart(currentTotal,animProgress=1){
     const v=minV+(maxV-minV)*(i/4),y=toY(v);
     ctx.strokeStyle=gridCol;ctx.lineWidth=1;
     ctx.beginPath();ctx.moveTo(PAD.left,y);ctx.lineTo(PAD.left+cW,y);ctx.stroke();
-    const label=chartMode==='pct'?fmt(v,1)+'%':(v>=1000000?fmt(v/1000000,2)+'M€':v>=1000?fmt(v/1000,1)+'k€':fmt(v,0)+'€');
+    const label=v>=1000000?fmt(v/1000000,2)+'M€':v>=1000?fmt(v/1000,1)+'k€':fmt(v,0)+'€';
     ctx.fillText(label,PAD.left-6,y+3);
   }
 
@@ -974,29 +934,21 @@ function renderChart(currentTotal,animProgress=1){
   ctx.beginPath();ctx.rect(0,0,clipW+12,H);ctx.clip();
 
   // Area + line
-  const isUp=drawPts[drawPts.length-1].value>=drawPts[0].value;
+  const isUp=pts[pts.length-1].value>=pts[0].value;
   const lineColor=isUp?'#2D7A5F':'#C4603A';
   const lineRgb=isUp?'45,122,95':'196,96,58';
   const grad=ctx.createLinearGradient(0,PAD.top,0,PAD.top+cH);
   grad.addColorStop(0,`rgba(${lineRgb},.14)`);grad.addColorStop(1,`rgba(${lineRgb},0)`);
-  ctx.beginPath();ctx.moveTo(toX(drawPts[0].date),PAD.top+cH);
-  drawPts.forEach(p=>ctx.lineTo(toX(p.date),toY(p.value)));
-  ctx.lineTo(toX(drawPts[drawPts.length-1].date),PAD.top+cH);
+  ctx.beginPath();ctx.moveTo(toX(pts[0].date),PAD.top+cH);
+  pts.forEach(p=>ctx.lineTo(toX(p.date),toY(p.value)));
+  ctx.lineTo(toX(pts[pts.length-1].date),PAD.top+cH);
   ctx.closePath();ctx.fillStyle=grad;ctx.fill();
-  ctx.beginPath();drawPts.forEach((p,i)=>i===0?ctx.moveTo(toX(p.date),toY(p.value)):ctx.lineTo(toX(p.date),toY(p.value)));
+  ctx.beginPath();pts.forEach((p,i)=>i===0?ctx.moveTo(toX(p.date),toY(p.value)):ctx.lineTo(toX(p.date),toY(p.value)));
   ctx.strokeStyle=lineColor;ctx.lineWidth=2;ctx.stroke();
 
-  // Zero line for % mode
-  if(chartMode==='pct'){
-    const zy=toY(0);
-    ctx.strokeStyle=isDark?'rgba(90,84,72,.4)':'rgba(180,170,155,.5)';
-    ctx.lineWidth=1;ctx.setLineDash([4,4]);
-    ctx.beginPath();ctx.moveTo(PAD.left,zy);ctx.lineTo(PAD.left+cW,zy);ctx.stroke();
-    ctx.setLineDash([]);
-  }
 
   // Live dot — blink opacity like sync-dot (no ring)
-  const lp=drawPts[drawPts.length-1];
+  const lp=pts[pts.length-1];
   const lpx=toX(lp.date),lpy=toY(lp.value);
   const blink=(Math.sin(Date.now()/700)+1)/2; // 0→1, ~1.4s cycle
   ctx.beginPath();ctx.arc(lpx,lpy,4.5,0,Math.PI*2);
@@ -1025,21 +977,20 @@ function initMainCursor(){
     const W=rect.width,H=rect.height;
     const PAD_L=72,PAD_R=14,PAD_T=12,PAD_B=34;
     const cW=W-PAD_L-PAD_R,cH=H-PAD_T-PAD_B;
-    const hoverPts=chartMode==='pct'&&twrPts.length>=2?twrPts:mainPts;
-    const allT=hoverPts.map(p=>p.date.getTime());
+    const allT=mainPts.map(p=>p.date.getTime());
     const minT=Math.min(...allT),maxT=Math.max(...allT);
     const frac=Math.max(0,Math.min(1,(mouseX-PAD_L)/cW));
-    let closest=hoverPts[0],minDiff=Infinity;
-    hoverPts.forEach(p=>{const d=Math.abs(p.date.getTime()-(minT+frac*(maxT-minT)));if(d<minDiff){minDiff=d;closest=p;}});
-    const hoverAllV=hoverPts.map(p=>p.value);
+    let closest=mainPts[0],minDiff=Infinity;
+    mainPts.forEach(p=>{const d=Math.abs(p.date.getTime()-(minT+frac*(maxT-minT)));if(d<minDiff){minDiff=d;closest=p;}});
+    const allV=mainPts.map(p=>p.value);
     const vPad=chartFilter==='1J'?0.15:chartFilter==='1M'?0.12:0.10;
-    const vMin=Math.min(...hoverAllV),vMax=Math.max(...hoverAllV),vRange=vMax-vMin||vMax*0.01;
+    const vMin=Math.min(...allV),vMax=Math.max(...allV),vRange=vMax-vMin||vMax*0.01;
     const scaleMin=vMin-vRange*vPad,scaleMax=vMax+vRange*vPad;
     const xPos=PAD_L+((closest.date.getTime()-minT)/(maxT-minT))*cW;
     const yPos=PAD_T+(1-(closest.value-scaleMin)/(scaleMax-scaleMin))*cH;
     const isUp=mainPts[mainPts.length-1].value>=mainPts[0].value;
     _hoverPt={xPos,yPos,color:isUp?'#2D7A5F':'#C4603A',
-      valText:chartMode==='pct'?fmt(closest.value,2)+'%':eur(Math.round(closest.value)),
+      valText:eur(Math.round(closest.value)),
       dateText:chartFilter==='1J'?closest.date.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):closest.date.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}),
       W,H,PAD_T,PAD_B};
     renderChart(portfolioValue());
