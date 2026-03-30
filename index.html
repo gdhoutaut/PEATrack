@@ -1026,11 +1026,11 @@ function initMainCursor(){
     const W=rect.width,H=rect.height;
     const PAD_L=72,PAD_R=14,PAD_T=12,PAD_B=34;
     const cW=W-PAD_L-PAD_R,cH=H-PAD_T-PAD_B;
+    const hoverPts=chartMode==='pct'&&twrPts.length>=2?twrPts:mainPts;
     const allT=hoverPts.map(p=>p.date.getTime());
     const minT=Math.min(...allT),maxT=Math.max(...allT);
     const frac=Math.max(0,Math.min(1,(mouseX-PAD_L)/cW));
-    let closest=mainPts[0],minDiff=Infinity;
-    const hoverPts=chartMode==='pct'&&twrPts.length>=2?twrPts:mainPts;
+    let closest=hoverPts[0],minDiff=Infinity;
     hoverPts.forEach(p=>{const d=Math.abs(p.date.getTime()-(minT+frac*(maxT-minT)));if(d<minDiff){minDiff=d;closest=p;}});
     const hoverAllV=hoverPts.map(p=>p.value);
     const vPad=chartFilter==='1J'?0.15:chartFilter==='1M'?0.12:0.10;
