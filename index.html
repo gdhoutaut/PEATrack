@@ -586,7 +586,7 @@ let buys=[],prices={},historicalData={},dailyData={};
 const setEl=(id,val,html=false)=>{const e=document.getElementById(id);if(e){if(html)e.innerHTML=val;else e.textContent=val;}};
 let chartFilter='MAX';
 let historyCache={};
-let mainPts=[],projPts=[];
+let mainPts=[],projPts=[],twrPts=[];
 let _hoverPt=null;
 let _chartAnimating=false;
 let _chartAnimFrame=null;
@@ -661,9 +661,9 @@ async function fetchHistoricalData(filter){
   const today=new Date();
   if(f==='1J'){interval='1m';fromStr=today.toISOString().split('T')[0];}
   else if(f==='1M'){interval='1d';const d=new Date(today);d.setMonth(d.getMonth()-1);fromStr=d.toISOString().split('T')[0];}
-  else if(f==='6M'){interval='1wk';const d=new Date(today);d.setMonth(d.getMonth()-6);fromStr=d.toISOString().split('T')[0];}
-  else if(f==='YTD'){interval='1wk';fromStr=`${today.getFullYear()}-01-01`;}
-  else{interval='1wk';const firstDate=buys.reduce((min,b)=>b.date<min?b.date:min,buys[0].date);const d=new Date(firstDate);d.setDate(d.getDate()-7);fromStr=d.toISOString().split('T')[0];}
+  else if(f==='6M'){interval='1d';const d=new Date(today);d.setMonth(d.getMonth()-6);fromStr=d.toISOString().split('T')[0];}
+  else if(f==='YTD'){interval='1d';fromStr=`${today.getFullYear()}-01-01`;}
+  else{interval='1d';const firstDate=buys.reduce((min,b)=>b.date<min?b.date:min,buys[0].date);const d=new Date(firstDate);d.setDate(d.getDate()-7);fromStr=d.toISOString().split('T')[0];}
   const results=await Promise.allSettled(
     ETFS.map(e=>fetch(`/api/history?ticker=${encodeURIComponent(e.ticker)}&from=${fromStr}&interval=${encodeURIComponent(interval)}`).then(r=>r.ok?r.json():null).catch(()=>null))
   );
@@ -893,7 +893,7 @@ function renderChart(currentTotal,animProgress=1){
 
   // TWR (Time-Weighted Return) for % mode
   // Between each buy, compute sub-period return, chain them
-  let twrPts=[];
+  twrPts=[];
   if(pts.length>=2&&chartMode==='pct'){
     const sortedBuyDates=[...buys].sort((a,b)=>a.date.localeCompare(b.date)).map(b=>b.date);
     let cumulReturn=1;
@@ -1026,22 +1026,22 @@ function initMainCursor(){
     const W=rect.width,H=rect.height;
     const PAD_L=72,PAD_R=14,PAD_T=12,PAD_B=34;
     const cW=W-PAD_L-PAD_R,cH=H-PAD_T-PAD_B;
-    const allT=mainPts.map(p=>p.date.getTime());
-    const allV=mainPts.map(p=>p.value);
+    const allT=hoverPts.map(p=>p.date.getTime());
     const minT=Math.min(...allT),maxT=Math.max(...allT);
     const frac=Math.max(0,Math.min(1,(mouseX-PAD_L)/cW));
     let closest=mainPts[0],minDiff=Infinity;
-    const hoverPts=chartMode==='pct'&&typeof twrPts!=='undefined'&&twrPts.length>=2?twrPts:mainPts;
+    const hoverPts=chartMode==='pct'&&twrPts.length>=2?twrPts:mainPts;
     hoverPts.forEach(p=>{const d=Math.abs(p.date.getTime()-(minT+frac*(maxT-minT)));if(d<minDiff){minDiff=d;closest=p;}});
+    const hoverAllV=hoverPts.map(p=>p.value);
     const vPad=chartFilter==='1J'?0.15:chartFilter==='1M'?0.12:0.10;
-    const vMin=Math.min(...allV),vMax=Math.max(...allV),vRange=vMax-vMin||vMax*0.01;
+    const vMin=Math.min(...hoverAllV),vMax=Math.max(...hoverAllV),vRange=vMax-vMin||vMax*0.01;
     const scaleMin=vMin-vRange*vPad,scaleMax=vMax+vRange*vPad;
     const xPos=PAD_L+((closest.date.getTime()-minT)/(maxT-minT))*cW;
     const yPos=PAD_T+(1-(closest.value-scaleMin)/(scaleMax-scaleMin))*cH;
     const isUp=mainPts[mainPts.length-1].value>=mainPts[0].value;
     _hoverPt={xPos,yPos,color:isUp?'#2D7A5F':'#C4603A',
       valText:chartMode==='pct'?fmt(closest.value,2)+'%':eur(Math.round(closest.value)),
-      dateText:(chartFilter==='1J'||chartFilter==='1W')?closest.date.toLocaleTimeString('fr-FR',{weekday:chartFilter==='1W'?'short':undefined,hour:'2-digit',minute:'2-digit'}):closest.date.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}),
+      dateText:chartFilter==='1J'?closest.date.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):closest.date.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}),
       W,H,PAD_T,PAD_B};
     renderChart(portfolioValue());
   });
