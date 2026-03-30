@@ -891,33 +891,21 @@ function renderChart(currentTotal,animProgress=1){
   if(currentTotal>0&&!isIntraday) pts.push({date:new Date(),value:currentTotal});
   mainPts=[...pts];
 
-  // TWR (Time-Weighted Return) for % mode
-  // Between each buy, compute sub-period return, chain them
+  // % mode : (valeur - total_investi_à_ce_jour) / total_investi * 100
+  // Même calcul que la carte Performance, tracé dans le temps
   twrPts=[];
   if(pts.length>=2&&chartMode==='pct'){
-    const sortedBuyDates=[...buys].sort((a,b)=>a.date.localeCompare(b.date)).map(b=>b.date);
-    let cumulReturn=1;
-    let periodStart=0; // index in pts
-    // Find sub-periods between buys
-    for(let idx=1;idx<pts.length;idx++){
-      const ptDateStr=pts[idx].date.toISOString().split('T')[0];
-      const ptDateStrPrev=pts[idx-1].date.toISOString().split('T')[0];
-      // Check if a buy happened between prev and current point
-      const buyInBetween=sortedBuyDates.find(d=>d>ptDateStrPrev&&d<=ptDateStr);
-      if(buyInBetween&&pts[periodStart].value>0){
-        // End of sub-period at pts[idx-1]
-        const subReturn=pts[idx-1].value/pts[periodStart].value;
-        cumulReturn*=subReturn;
-        periodStart=idx;
+    const sortedBuys2=[...buys].sort((a,b)=>a.date.localeCompare(b.date));
+    pts.forEach(p=>{
+      const dateStr=p.date.toISOString().split('T')[0];
+      const investedSoFar=(cfg.prior_invested||0)+sortedBuys2
+        .filter(b=>b.date<=dateStr)
+        .reduce((s,b)=>s+b.parts*b.price,0);
+      if(investedSoFar>0){
+        const pct=(p.value-investedSoFar)/investedSoFar*100;
+        twrPts.push({date:p.date,value:pct});
       }
-      if(pts[periodStart].value>0){
-        const subR=pts[idx].value/pts[periodStart].value;
-        const twr=(cumulReturn*subR-1)*100;
-        twrPts.push({date:pts[idx].date,value:twr});
-      }
-    }
-    // Insert t=0 at start
-    twrPts.unshift({date:pts[0].date,value:0});
+    });
   }
   const drawPts=chartMode==='pct'&&twrPts.length>=2?twrPts:pts;
 
