@@ -994,13 +994,22 @@ function initMainCursor(){
     const allT=mainPts.map(p=>p.date.getTime());
     const minT=Math.min(...allT),maxT=Math.max(...allT);
     const frac=Math.max(0,Math.min(1,(mouseX-PAD_L)/cW));
-    let closest=mainPts[0],minDiff=Infinity;
-    mainPts.forEach(p=>{const d=Math.abs(p.date.getTime()-(minT+frac*(maxT-minT)));if(d<minDiff){minDiff=d;closest=p;}});
+    let closest=mainPts[0],closestIdx=0,minDiff=Infinity;
+    // Pour 7J : chercher par index (comme toX), sinon par timestamp
+    if(chartFilter==='7J'){
+      const targetIdx=frac*(mainPts.length-1);
+      mainPts.forEach((p,i)=>{const d=Math.abs(i-targetIdx);if(d<minDiff){minDiff=d;closest=p;closestIdx=i;}});
+    } else {
+      mainPts.forEach((p,i)=>{const d=Math.abs(p.date.getTime()-(minT+frac*(maxT-minT)));if(d<minDiff){minDiff=d;closest=p;closestIdx=i;}});
+    }
     const allV=mainPts.map(p=>p.value);
     const vPad=chartFilter==='1J'?0.15:chartFilter==='1M'?0.12:0.10;
     const vMin=Math.min(...allV),vMax=Math.max(...allV),vRange=vMax-vMin||vMax*0.01;
     const scaleMin=vMin-vRange*vPad,scaleMax=vMax+vRange*vPad;
-    const xPos=PAD_L+((closest.date.getTime()-minT)/(maxT-minT))*cW;
+    // xPos cohérent avec toX dans renderChart
+    const xPos=chartFilter==='7J'
+      ?PAD_L+(closestIdx/(mainPts.length-1))*cW
+      :PAD_L+((closest.date.getTime()-minT)/(maxT-minT))*cW;
     const yPos=PAD_T+(1-(closest.value-scaleMin)/(scaleMax-scaleMin))*cH;
     const isUp=mainPts[mainPts.length-1].value>=mainPts[0].value;
     _hoverPt={xPos,yPos,color:isUp?'#2D7A5F':'#C4603A',
