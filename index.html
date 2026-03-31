@@ -835,37 +835,25 @@ function renderChart(currentTotal,animProgress=1){
   let allDates=historicalData[refTicker].map(p=>p.date).sort();
   if(chartFilter==='1J'){
     const todayStr=new Date().toISOString().split('T')[0];
-    let filtered=allDates.filter(d=>{
-      const dt=new Date(d);
-      if(dt.toISOString().split('T')[0]!==todayStr) return false;
-      const h=dt.getUTCHours(),m=dt.getUTCMinutes(),mins=h*60+m;
-      return mins>=MARKET_OPEN_H*60&&mins<=MARKET_CLOSE_H*60+MARKET_CLOSE_M;
-    });
+    // Garder les points d'aujourd'hui (Yahoo ne retourne que les heures de marché)
+    let filtered=allDates.filter(d=>d.startsWith(todayStr));
+    // Fallback : dernière session disponible si pas de données aujourd'hui
     if(filtered.length===0){
-      const lastDate=allDates.filter(d=>{
-        const dt=new Date(d);
-        const dow=dt.getUTCDay();
-        if(dow===0||dow===6) return false;
-        const h=dt.getUTCHours(),m=dt.getUTCMinutes(),mins=h*60+m;
-        return mins>=MARKET_OPEN_H*60&&mins<=MARKET_CLOSE_H*60+MARKET_CLOSE_M;
-      }).pop();
-      if(lastDate){
-        const lastDay=new Date(lastDate).toISOString().split('T')[0];
-        filtered=allDates.filter(d=>d.startsWith(lastDay));
-      }
+      const allDays=[...new Set(allDates.map(d=>d.slice(0,10)))].sort();
+      const lastDay=allDays.pop();
+      if(lastDay) filtered=allDates.filter(d=>d.startsWith(lastDay));
     }
     allDates=filtered;
   } else if(chartFilter==='7J'){
     const cutoff=new Date();
     cutoff.setDate(cutoff.getDate()-7);
     const cutoffStr=cutoff.toISOString().split('T')[0];
+    // On fait confiance à Yahoo pour les heures de marché, on filtre juste les weekends et la période
     allDates=allDates.filter(d=>{
       const dt=new Date(d);
       if(dt.toISOString().split('T')[0]<cutoffStr) return false;
       const dow=dt.getUTCDay();
-      if(dow===0||dow===6) return false;
-      const h=dt.getUTCHours(),m=dt.getUTCMinutes(),mins=h*60+m;
-      return mins>=MARKET_OPEN_H*60&&mins<=MARKET_CLOSE_H*60+MARKET_CLOSE_M;
+      return dow!==0&&dow!==6; // enlever weekends uniquement
     });
   }
 
@@ -966,7 +954,17 @@ function renderChart(currentTotal,animProgress=1){
   pts.forEach(p=>ctx.lineTo(toX(p.date),toY(p.value)));
   ctx.lineTo(toX(pts[pts.length-1].date),PAD.top+cH);
   ctx.closePath();ctx.fillStyle=grad;ctx.fill();
-  ctx.beginPath();pts.forEach((p,i)=>i===0?ctx.moveTo(toX(p.date),toY(p.value)):ctx.lineTo(toX(p.date),toY(p.value)));
+  ctx.beginPath();
+  pts.forEach((p,i)=>{
+    if(i===0){ctx.moveTo(toX(p.date),toY(p.value));return;}
+    // Pour 7J : moveTo si nouvelle journée (évite le trait plat entre sessions)
+    if(chartFilter==='7J'||chartFilter==='1J'){
+      const prevDay=pts[i-1].date.toISOString().split('T')[0];
+      const curDay=p.date.toISOString().split('T')[0];
+      if(prevDay!==curDay){ctx.moveTo(toX(p.date),toY(p.value));return;}
+    }
+    ctx.lineTo(toX(p.date),toY(p.value));
+  });
   ctx.strokeStyle=lineColor;ctx.lineWidth=2;ctx.stroke();
 
 
