@@ -891,7 +891,10 @@ function renderChart(currentTotal,animProgress=1){
   const vMin=Math.min(...allV),vMax=Math.max(...allV),vRange=vMax-vMin||vMax*0.01;
   const minV=vMin-vRange*vPad;
   const maxV=vMax+vRange*vPad;
-  const toX=d=>PAD.left+((d.getTime()-minT)/(maxT-minT))*cW;
+  // Pour 7J : position X basée sur l'index (compresse les weekends)
+  const toX=chartFilter==='7J'
+    ?(d=>{const idx=pts.findIndex(p=>p.date.getTime()===d.getTime());return PAD.left+(Math.max(0,idx)/(pts.length-1))*cW;})
+    :(d=>PAD.left+((d.getTime()-minT)/(maxT-minT))*cW);
   const toY=v=>PAD.top+(1-(v-minV)/(maxV-minV))*cH;
 
   // Y grid
@@ -954,17 +957,7 @@ function renderChart(currentTotal,animProgress=1){
   pts.forEach(p=>ctx.lineTo(toX(p.date),toY(p.value)));
   ctx.lineTo(toX(pts[pts.length-1].date),PAD.top+cH);
   ctx.closePath();ctx.fillStyle=grad;ctx.fill();
-  ctx.beginPath();
-  pts.forEach((p,i)=>{
-    if(i===0){ctx.moveTo(toX(p.date),toY(p.value));return;}
-    // Pour 7J : moveTo si nouvelle journée (évite le trait plat entre sessions)
-    if(chartFilter==='7J'||chartFilter==='1J'){
-      const prevDay=pts[i-1].date.toISOString().split('T')[0];
-      const curDay=p.date.toISOString().split('T')[0];
-      if(prevDay!==curDay){ctx.moveTo(toX(p.date),toY(p.value));return;}
-    }
-    ctx.lineTo(toX(p.date),toY(p.value));
-  });
+  ctx.beginPath();pts.forEach((p,i)=>i===0?ctx.moveTo(toX(p.date),toY(p.value)):ctx.lineTo(toX(p.date),toY(p.value)));
   ctx.strokeStyle=lineColor;ctx.lineWidth=2;ctx.stroke();
 
 
