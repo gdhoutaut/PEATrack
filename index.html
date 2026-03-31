@@ -437,6 +437,7 @@ canvas{display:block;width:100%;height:100%;}
         </div>
         <div class="chart-filters">
           <button class="cf-btn" onclick="setChartFilter('1J')">1J</button>
+          <button class="cf-btn" onclick="setChartFilter('7J')">7J</button>
           <button class="cf-btn" onclick="setChartFilter('1M')">1M</button>
           <button class="cf-btn" onclick="setChartFilter('6M')">6M</button>
           <button class="cf-btn" onclick="setChartFilter('YTD')">YTD</button>
@@ -653,6 +654,7 @@ async function fetchHistoricalData(filter){
   let interval,fromStr;
   const today=new Date();
   if(f==='1J'){interval='1m';fromStr=today.toISOString().split('T')[0];}
+  else if(f==='7J'){interval='30m';const d=new Date(today);d.setDate(d.getDate()-14);fromStr=d.toISOString().split('T')[0];}
   else if(f==='1M'){interval='1d';const d=new Date(today);d.setMonth(d.getMonth()-1);fromStr=d.toISOString().split('T')[0];}
   else if(f==='6M'){interval='1d';const d=new Date(today);d.setMonth(d.getMonth()-6);fromStr=d.toISOString().split('T')[0];}
   else if(f==='YTD'){interval='1d';fromStr=`${today.getFullYear()}-01-01`;}
@@ -663,7 +665,7 @@ async function fetchHistoricalData(filter){
   const newData={};
   results.forEach((r,i)=>{if(r.status==='fulfilled'&&r.value?.points) newData[ETFS[i].ticker]=r.value.points;});
   historicalData=newData;
-  if(f!=='1J'&&f!=='YTD') historyCache[f]=newData;
+  if(f!=='1J'&&f!=='7J'&&f!=='YTD') historyCache[f]=newData;
   render();
   animateChart(portfolioValue());
 }
@@ -724,7 +726,7 @@ function render(){
 
   const pnlHTML=invested>0?`<span class="${pnl>=0?'pos':'neg'}">${pnl>=0?'+':''}${eur(pnl)}</span> P&L`:'<span class="neu">Aucune position</span>';
   const perfHTML=`<span class="${perf>=0?'pos':'neg'}">${sgn(perf)}%</span><span style="font-size:14px;margin-left:8px;color:${perf>=0?'var(--accent)':'var(--terra)'}">${perfEur>=0?'+':''}${eur(perfEur)}</span>`;
-  const perfLabels={'1J':"aujourd'hui",'1M':'sur 1 mois','6M':'sur 6 mois','YTD':`YTD ${new Date().getFullYear()}`,'MAX':"depuis l'ouverture"};
+  const perfLabels={'1J':"aujourd'hui",'7J':'sur 7 jours','1M':'sur 1 mois','6M':'sur 6 mois','YTD':`YTD ${new Date().getFullYear()}`,'MAX':"depuis l'ouverture"};
   const investedSub=`${buys.length} achat${buys.length>1?'s':''}${cfg.prior_invested>0?` · +${eur(cfg.prior_invested)} antérieurs`:''}`;
   const progrSub=`objectif ${cfg.target_age} ans · ${new Date().getFullYear()+(cfg.target_age-cfg.age)}`;
 
@@ -833,14 +835,12 @@ function renderChart(currentTotal,animProgress=1){
   let allDates=historicalData[refTicker].map(p=>p.date).sort();
   if(chartFilter==='1J'){
     const todayStr=new Date().toISOString().split('T')[0];
-    // Try today first
     let filtered=allDates.filter(d=>{
       const dt=new Date(d);
       if(dt.toISOString().split('T')[0]!==todayStr) return false;
       const h=dt.getUTCHours(),m=dt.getUTCMinutes(),mins=h*60+m;
       return mins>=MARKET_OPEN_H*60&&mins<=MARKET_CLOSE_H*60+MARKET_CLOSE_M;
     });
-    // If no data today (market not open yet / weekend), fallback to last available trading day
     if(filtered.length===0){
       const lastDate=allDates.filter(d=>{
         const dt=new Date(d);
@@ -855,10 +855,22 @@ function renderChart(currentTotal,animProgress=1){
       }
     }
     allDates=filtered;
+  } else if(chartFilter==='7J'){
+    const cutoff=new Date();
+    cutoff.setDate(cutoff.getDate()-7);
+    const cutoffStr=cutoff.toISOString().split('T')[0];
+    allDates=allDates.filter(d=>{
+      const dt=new Date(d);
+      if(dt.toISOString().split('T')[0]<cutoffStr) return false;
+      const dow=dt.getUTCDay();
+      if(dow===0||dow===6) return false;
+      const h=dt.getUTCHours(),m=dt.getUTCMinutes(),mins=h*60+m;
+      return mins>=MARKET_OPEN_H*60&&mins<=MARKET_CLOSE_H*60+MARKET_CLOSE_M;
+    });
   }
 
   const sortedBuys=[...buys].sort((a,b)=>a.date.localeCompare(b.date));
-  const isIntraday=chartFilter==='1J';
+  const isIntraday=chartFilter==='1J'||chartFilter==='7J';
   const pts=[];
   allDates.forEach(dateStr=>{
     const dateForBuy=isIntraday?dateStr.split('T')[0]:dateStr;
@@ -915,6 +927,18 @@ function renderChart(currentTotal,animProgress=1){
   if(chartFilter==='1J'){
     let d=new Date(Date.UTC(new Date(minT).getUTCFullYear(),new Date(minT).getUTCMonth(),new Date(minT).getUTCDate(),MARKET_OPEN_H,0,0));
     while(d.getTime()<=maxT){if(d.getTime()>=minT) drawXTick(toX(d),d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',timeZone:'UTC'}));d=new Date(d.getTime()+2*3600000);}
+  } else if(chartFilter==='7J'){
+    const seen=new Set();
+    allDates.forEach(dateStr=>{
+      const dt=new Date(dateStr);
+      const dayStr=dt.toISOString().split('T')[0];
+      if(!seen.has(dayStr)){
+        seen.add(dayStr);
+        const open=new Date(Date.UTC(dt.getUTCFullYear(),dt.getUTCMonth(),dt.getUTCDate(),MARKET_OPEN_H,0,0));
+        if(open.getTime()>=minT&&open.getTime()<=maxT)
+          drawXTick(toX(open),open.toLocaleDateString('fr-FR',{weekday:'short',day:'2-digit',month:'short'}));
+      }
+    });
   } else if(spanDays<=40){
     let d=new Date(new Date(minT).getFullYear(),new Date(minT).getMonth(),new Date(minT).getDate());
     while(d.getTime()<=maxT){if(d.getTime()>=minT) drawXTick(toX(d),d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short'}));d=new Date(d.getTime()+7*86400000);}
@@ -990,7 +1014,7 @@ function initMainCursor(){
     const isUp=mainPts[mainPts.length-1].value>=mainPts[0].value;
     _hoverPt={xPos,yPos,color:isUp?'#2D7A5F':'#C4603A',
       valText:eur(Math.round(closest.value)),
-      dateText:chartFilter==='1J'?closest.date.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):closest.date.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}),
+      dateText:(chartFilter==='1J'||chartFilter==='7J')?closest.date.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):closest.date.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}),
       W,H,PAD_T,PAD_B};
     renderChart(portfolioValue());
   });
