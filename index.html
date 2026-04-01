@@ -698,14 +698,11 @@ function render(){
   if(chartFilter!=='MAX'&&Object.keys(historicalData).length>0){
     const held=partsHeld();
     let valStart=0,valNow=0,hasStart=false;
-    const today2=new Date();
-    let startDate;
-    if(chartFilter==='1J') startDate=new Date(today2.toISOString().split('T')[0]);
-    else if(chartFilter==='1M'){startDate=new Date(today2);startDate.setMonth(startDate.getMonth()-1);}
-    else if(chartFilter==='6M'){startDate=new Date(today2);startDate.setMonth(startDate.getMonth()-6);}
-    else if(chartFilter==='YTD') startDate=new Date(today2.getFullYear(),0,1);
-    if(startDate){
-      const startStr=startDate.toISOString().split('T')[0];
+    // Utiliser le premier point réel de mainPts pour aligner avec la courbe
+    const startStr=mainPts.length>0
+      ?mainPts[0].date.toISOString().split('T')[0]
+      :null;
+    if(startStr){
       ETFS.forEach((e,i)=>{
         if(held[i]===0) return;
         const hist=historicalData[e.ticker];
