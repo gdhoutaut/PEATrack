@@ -509,10 +509,8 @@ canvas{display:block;width:100%;height:100%;}
     <div class="two-fields">
       <div class="field"><label>ETF</label>
         <select id="buyEtf">
-          <option value="0">ESEE — BNP S&P 500</option>
-          <option value="1">AE57 — Amundi MSCI World</option>
-          <option value="2">ETSZ — STOXX Europe 600</option>
-          <option value="3">18MH — Amundi Emergents</option>
+          <option value="0">AE57 — Amundi MSCI World</option>
+          <option value="1">18MH — Amundi Emergents</option>
         </select>
       </div>
       <div class="field"><label>Date</label><input type="date" id="buyDate"></div>
@@ -567,13 +565,11 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 const sb=supabase.createClient(SUPA_URL,SUPA_KEY);
 
 const ETFS=[
-  {ticker:'ESE.PA',  label:'ESEE',name:'BNP Easy S&P 500',         zone:'US'},
   {ticker:'DCAM.PA', label:'AE57',name:'Amundi PEA MSCI World',    zone:'World'},
-  {ticker:'ETZ.PA',  label:'ETSZ',name:'BNP Easy STOXX Europe 600',zone:'Europe'},
   {ticker:'PAEEM.PA',label:'18MH',name:'Amundi PEA Emergents',     zone:'EM'},
 ];
-const COLORS=['#2D7A5F','#3B6EA8','#7C5C9E','#A8782A'];
-const COLORS_RGB=['45,122,95','59,110,168','124,92,158','168,120,42'];
+const COLORS=['#3B6EA8','#A8782A'];
+const COLORS_RGB=['59,110,168','168,120,42'];
 const MARKET_OPEN_H=8,MARKET_CLOSE_H=16,MARKET_CLOSE_M=30;
 
 let cfg={age:26,target_age:50,target:1000000,annual_return:7,prior_invested:0};
@@ -671,9 +667,9 @@ async function fetchHistoricalData(filter){
 }
 
 // ── COMPUTED ──────────────────────────────────────────────────────────────────
-function partsHeld(){const h=[0,0,0,0];buys.forEach(b=>{h[b.etfIdx]+=b.parts;});return h;}
+function partsHeld(){const h=[0,0];buys.forEach(b=>{h[b.etfIdx]+=b.parts;});return h;}
 function pruByEtf(){
-  const cost=[0,0,0,0],parts=[0,0,0,0];
+  const cost=[0,0],parts=[0,0];
   buys.forEach(b=>{cost[b.etfIdx]+=b.parts*b.price;parts[b.etfIdx]+=b.parts;});
   return parts.map((p,i)=>p>0?cost[i]/p:0);
 }
@@ -1269,7 +1265,7 @@ function renderHistory(){
 function toggleGroup(el){el.nextElementSibling.classList.toggle('open');el.querySelector('.chevron').classList.toggle('open');}
 
 // ── NEWS ──────────────────────────────────────────────────────────────────────
-const ETF_COLORS_MAP={'ESEE':'#2D7A5F','AE57':'#3B6EA8','ETSZ':'#7C5C9E','18MH':'#A8782A'};
+const ETF_COLORS_MAP={'AE57':'#3B6EA8','18MH':'#A8782A'};
 async function fetchNews(){
   const btn=document.getElementById('newsRefreshBtn');
   const container=document.getElementById('newsGroups');
@@ -1363,7 +1359,7 @@ async function saveBuy(){
   const date=document.getElementById('buyDate').value;
   const note=document.getElementById('buyNote').value.trim();
   if(!parts||!price||!date) return;
-  const tempHeld=[0,0,0,0];
+  const tempHeld=[0,0];
   [...buys,{etfIdx,parts}].forEach(b=>tempHeld[b.etfIdx]+=b.parts);
   const pvad=ETFS.reduce((s,e,i)=>s+(prices[e.ticker]?.price??price)*tempHeld[i],0);
   const btn=document.getElementById('saveBuyBtn');
